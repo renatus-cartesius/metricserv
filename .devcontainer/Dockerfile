@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine
+FROM golang:1.22.7-alpine
 
 ARG USERNAME=renatus
 ARG USER_UID=1000
