@@ -21,7 +21,7 @@ func (s *MemStorage) Update(name string, value interface{}) error {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 
-	metric, _ := s.metrics[name]
+	metric := s.metrics[name]
 	metric.Change(value)
 
 	return nil
