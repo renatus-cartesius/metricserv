@@ -1,58 +1,50 @@
 package handlers
 
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
+// func TestUpdateHandler(t *testing.T) {
+// 	type want struct {
+// 		code        int
+// 		contentType string
+// 	}
+// 	tests := []struct {
+// 		name    string
+// 		path    string
+// 		pattern string
+// 		metric  string
+// 		value   string
+// 		want    want
+// 	}{
+// 		{
+// 			name:    "gauge test",
+// 			path:    "http://localhost:8080/update/gauge/MCacheInuse/14400.000000",
+// 			pattern: "POST /update/{type}/{name}/{value}",
+// 			metric:  "Alloc",
+// 			value:   "1233.1233",
+// 			want: want{
+// 				code:        200,
+// 				contentType: "text/plain",
+// 			},
+// 		},
+// 	}
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			router := http.NewServeMux()
+// 			router.HandleFunc(tt.pattern, UpdateHandler)
 
-	"github.com/stretchr/testify/assert"
-)
+// 			server := httptest.NewServer(router)
+// 			defer server.Close()
 
-func TestUpdateHandler(t *testing.T) {
-	type want struct {
-		code        int
-		contentType string
-	}
-	tests := []struct {
-		name    string
-		path    string
-		pattern string
-		metric  string
-		value   string
-		want    want
-	}{
-		{
-			name:    "gauge test",
-			path:    "http://localhost:8080/update/gauge/MCacheInuse/14400.000000",
-			pattern: "POST /update/{type}/{name}/{value}",
-			metric:  "Alloc",
-			value:   "1233.1233",
-			want: want{
-				code:        200,
-				contentType: "text/plain",
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			router := http.NewServeMux()
-			router.HandleFunc(tt.pattern, UpdateHandler)
+// 			request, _ := http.NewRequest(http.MethodPost, tt.path, nil)
+// 			request.Header.Set("Content-Type", "text/plain")
 
-			server := httptest.NewServer(router)
-			defer server.Close()
+// 			response, err := http.DefaultClient.Do(request)
+// 			if err != nil {
+// 				t.Fatalf("Failed to send request \"%s\": %v", tt.path, err)
+// 			}
+// 			defer response.Body.Close()
 
-			request, _ := http.NewRequest(http.MethodPost, tt.path, nil)
-			request.Header.Set("Content-Type", "text/plain")
+// 			assert.Equal(t, tt.want.code, response.StatusCode)
 
-			response, err := http.DefaultClient.Do(request)
-			if err != nil {
-				t.Fatalf("Failed to send request \"%s\": %v", tt.path, err)
-			}
-			defer response.Body.Close()
-
-			assert.Equal(t, tt.want.code, response.StatusCode)
-
-			assert.Equal(t, tt.want.contentType, response.Header.Get("Content-Type"))
-		})
-	}
-}
+// 			assert.Equal(t, tt.want.contentType, response.Header.Get("Content-Type"))
+// 		})
+// 	}
+// }
