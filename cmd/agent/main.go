@@ -7,8 +7,5 @@ import (
 
 func main() {
 	agent := agent.NewAgent(2, "http://localhost:8080", &monitor.MemMonitor{})
-	err := agent.Serve()
-	if err != nil {
-		panic(err)
-	}
+	agent.Serve()
 }

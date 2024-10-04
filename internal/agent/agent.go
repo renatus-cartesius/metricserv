@@ -24,11 +24,11 @@ func NewAgent(pollInterval int, serverUrl string, monitor monitor.Monitor) *Agen
 	}
 }
 
-func (a *Agent) Serve() error {
+func (a *Agent) Serve() {
 
 	for {
 		if err := a.monitor.Flush(); err != nil {
-			return fmt.Errorf("%v", err)
+			fmt.Printf("%v", err)
 		}
 		stats := a.monitor.Get()
 		for m, v := range stats {
@@ -41,14 +41,14 @@ func (a *Agent) Serve() error {
 			)
 			req.Header.Set("Content-Type", "text/plain")
 			if err != nil {
-				return fmt.Errorf("%v", err)
+				fmt.Printf("%v", err)
 			}
 
 			res, err := a.httpClient.Do(req)
 			if err != nil {
-				return fmt.Errorf("%v", err)
+				fmt.Printf("%v", err)
+				continue
 			}
-			res.Body.Close()
 
 			fmt.Println("Sended: ", url, res.StatusCode)
 
@@ -60,15 +60,16 @@ func (a *Agent) Serve() error {
 			url,
 			nil,
 		)
-		req.Header.Set("Content-Type", "text/plain")
 		if err != nil {
-			return fmt.Errorf("%v", err)
+			fmt.Printf("%v", err)
 		}
+
+		req.Header.Set("Content-Type", "text/plain")
 		res, err := a.httpClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("%v", err)
+			fmt.Printf("%v", err)
+			continue
 		}
-		res.Body.Close()
 		fmt.Println("Sended: ", url, res.StatusCode)
 
 		time.Sleep(time.Duration(a.pollInterval) * time.Second)
