@@ -11,7 +11,7 @@ import (
 type Agent struct {
 	monitor      monitor.Monitor
 	pollInterval int
-	serverUrl    string
+	serverURL    string
 	httpClient   *http.Client
 }
 
@@ -19,7 +19,7 @@ func NewAgent(pollInterval int, serverUrl string, monitor monitor.Monitor) *Agen
 	return &Agent{
 		monitor:      monitor,
 		pollInterval: pollInterval,
-		serverUrl:    serverUrl,
+		serverURL:    serverUrl,
 		httpClient:   &http.Client{},
 	}
 }
@@ -28,17 +28,18 @@ func (a *Agent) Serve() error {
 
 	for {
 		if err := a.monitor.Flush(); err != nil {
-			fmt.Errorf("%v")
+			return fmt.Errorf("%v", err)
 		}
 		stats := a.monitor.Get()
 		for m, v := range stats {
 
-			url := fmt.Sprintf("%s/update/gauge/%s/%s", a.serverUrl, m, v)
+			url := fmt.Sprintf("%s/update/gauge/%s/%s", a.serverURL, m, v)
 			req, err := http.NewRequest(
 				http.MethodPost,
 				url,
 				nil,
 			)
+			req.Header.Set("Content-Type", "text/plain")
 			if err != nil {
 				return fmt.Errorf("%v", err)
 			}
@@ -53,12 +54,13 @@ func (a *Agent) Serve() error {
 
 		}
 
-		url := fmt.Sprintf("%s/update/counter/%s/%d", a.serverUrl, "PollCount", 1)
+		url := fmt.Sprintf("%s/update/counter/%s/%d", a.serverURL, "PollCount", 1)
 		req, err := http.NewRequest(
 			http.MethodPost,
 			url,
 			nil,
 		)
+		req.Header.Set("Content-Type", "text/plain")
 		if err != nil {
 			return fmt.Errorf("%v", err)
 		}

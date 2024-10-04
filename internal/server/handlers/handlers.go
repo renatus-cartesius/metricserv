@@ -17,11 +17,6 @@ func init() {
 
 func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	if !slices.Contains(metrics.AllowedTypes, r.PathValue("type")) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -84,7 +79,7 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		w.WriteHeader(http.StatusBadRequest)
+		// w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -99,5 +94,6 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		body += v.String() + "\n"
 	}
 
+	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(body))
 }
