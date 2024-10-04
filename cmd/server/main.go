@@ -16,12 +16,4 @@ func main() {
 		panic(err)
 
 	}
-	// a := "123.123"
-	// value, err := strconv.ParseFloat(a, 64)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// fmt.Println(int64(value))
-	// fmt.Println(math.Round(value))
 }
