@@ -15,11 +15,11 @@ type Agent struct {
 	httpClient   *http.Client
 }
 
-func NewAgent(pollInterval int, serverUrl string, monitor monitor.Monitor) *Agent {
+func NewAgent(pollInterval int, serverURL string, monitor monitor.Monitor) *Agent {
 	return &Agent{
 		monitor:      monitor,
 		pollInterval: pollInterval,
-		serverURL:    serverUrl,
+		serverURL:    serverURL,
 		httpClient:   &http.Client{},
 	}
 }
@@ -49,6 +49,7 @@ func (a *Agent) Serve() {
 				fmt.Printf("%v", err)
 				continue
 			}
+			res.Body.Close()
 
 			fmt.Println("Sended: ", url, res.StatusCode)
 
@@ -70,6 +71,7 @@ func (a *Agent) Serve() {
 			fmt.Printf("%v", err)
 			continue
 		}
+		res.Body.Close()
 		fmt.Println("Sended: ", url, res.StatusCode)
 
 		time.Sleep(time.Duration(a.pollInterval) * time.Second)
