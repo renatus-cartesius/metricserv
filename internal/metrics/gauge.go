@@ -16,7 +16,7 @@ func (m *GaugeMetric) String() string {
 }
 
 func (m *GaugeMetric) GetValue() string {
-	return fmt.Sprintf("%f", m.Value)
+	return fmt.Sprintf("%v", m.Value)
 }
 
 func (m *GaugeMetric) GetType() string {
