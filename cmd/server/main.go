@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
@@ -12,6 +13,9 @@ import (
 
 func main() {
 	srvAddress := flag.String("a", "localhost:8080", "address to metrics server")
+	if envSrvAddress := os.Getenv("ADDRESS"); envSrvAddress != "" {
+		*srvAddress = envSrvAddress
+	}
 	flag.Parse()
 
 	memStorage := storage.NewMemStorage()
