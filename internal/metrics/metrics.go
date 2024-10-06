@@ -15,4 +15,6 @@ var (
 type Metric interface {
 	String() string
 	Change(interface{}) error
+	GetValue() string
+	GetType() string
 }

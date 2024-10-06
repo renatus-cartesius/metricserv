@@ -46,7 +46,7 @@ func (a *Agent) Serve() {
 
 			res, err := a.httpClient.Do(req)
 			if err != nil {
-				fmt.Printf("%v", err)
+				fmt.Printf("Error on sending metric %s:%s : %v\n", m, v, err)
 				continue
 			}
 			res.Body.Close()
@@ -68,7 +68,8 @@ func (a *Agent) Serve() {
 		req.Header.Set("Content-Type", "text/plain")
 		res, err := a.httpClient.Do(req)
 		if err != nil {
-			fmt.Printf("%v", err)
+			fmt.Printf("Error on sending metric %s:%d : %v\n", "PollCount", 1, err)
+			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 			continue
 		}
 		res.Body.Close()

@@ -5,26 +5,31 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
-var memStorage *storage.MemStorage
-
-func init() {
-	memStorage = storage.NewMemStorage()
+type ServerHandler struct {
+	storage storage.Storage
 }
 
-func UpdateHandler(w http.ResponseWriter, r *http.Request) {
+func NewServerHandler(storage storage.Storage) *ServerHandler {
+	return &ServerHandler{
+		storage: storage,
+	}
+}
 
-	if !slices.Contains(metrics.AllowedTypes, r.PathValue("type")) {
+func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
+
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+	metricValue := chi.URLParam(r, "value")
+
+	if !slices.Contains(metrics.AllowedTypes, metricType) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	metricType := r.PathValue("type")
-	metricName := r.PathValue("name")
-	metricValue := r.PathValue("value")
 
 	switch metricType {
 	case metrics.TypeCounter:
@@ -35,55 +40,85 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !memStorage.CheckMetric(metricName) {
+		if !srv.storage.CheckMetric(metricName) {
 			metric := &metrics.CounterMetric{
 				Name:  metricName,
-				Value: value,
+				Value: int64(0),
 			}
-			err := memStorage.Add(metricName, metric)
+			err := srv.storage.Add(metricName, metric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err = memStorage.Update(metricName, value)
+		err = srv.storage.Update(metricType, metricName, value)
 		if err != nil {
+			if err == storage.ErrWrongUpdateType {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 	case metrics.TypeGauge:
-		value, err := strconv.ParseFloat(r.PathValue("value"), 64)
+		value, err := strconv.ParseFloat(metricValue, 64)
 
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		if !memStorage.CheckMetric(metricName) {
+		if !srv.storage.CheckMetric(metricName) {
 			metric := &metrics.GaugeMetric{
 				Name:  metricName,
-				Value: value,
+				Value: float64(0),
 			}
-			err := memStorage.Add(metricName, metric)
+			err := srv.storage.Add(metricName, metric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err = memStorage.Update(metricName, value)
+		err = srv.storage.Update(metricType, metricName, value)
 		if err != nil {
+			if err == storage.ErrWrongUpdateType {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	default:
-		// w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
-	allMetrics, err := memStorage.ListAll()
+	w.WriteHeader(http.StatusOK)
+}
+
+func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+
+	if !srv.storage.CheckMetric(metricName) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	value := srv.storage.GetValue(metricType, metricName)
+	if value == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	w.Write([]byte(value))
+}
+
+func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
+	allMetrics, err := srv.storage.ListAll()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

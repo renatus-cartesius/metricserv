@@ -17,11 +17,14 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (s *MemStorage) Update(name string, value interface{}) error {
+func (s *MemStorage) Update(mtype, name string, value interface{}) error {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 
 	metric := s.metrics[name]
+	if metric.GetType() != mtype {
+		return ErrWrongUpdateType
+	}
 	metric.Change(value)
 
 	return nil
@@ -35,6 +38,7 @@ func (s *MemStorage) Add(name string, metric metrics.Metric) error {
 }
 
 func (s *MemStorage) CheckMetric(name string) bool {
+	// TODO: need to add check of metric type
 	s.mx.RLock()
 	defer s.mx.RUnlock()
 	_, ok := s.metrics[name]
@@ -46,4 +50,14 @@ func (s *MemStorage) ListAll() (map[string]metrics.Metric, error) {
 	defer s.mx.RUnlock()
 	metrics := s.metrics
 	return metrics, nil
+}
+
+func (s *MemStorage) GetValue(mtype, name string) string {
+	s.mx.RLock()
+	defer s.mx.RUnlock()
+	metric := s.metrics[name]
+	if metric.GetType() != mtype {
+		return ""
+	}
+	return metric.GetValue()
 }
