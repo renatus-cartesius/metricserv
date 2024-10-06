@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
@@ -10,6 +11,9 @@ import (
 )
 
 func main() {
+	srvAddress := flag.String("a", "localhost:8080", "address to metrics server")
+	flag.Parse()
+
 	memStorage := storage.NewMemStorage()
 	srv := handlers.NewServerHandler(memStorage)
 
@@ -23,5 +27,5 @@ func main() {
 
 	// r.Post("/update/{type}/{name}/{value}", srv.Update)
 
-	log.Fatalln(http.ListenAndServe("localhost:8080", r))
+	log.Fatalln(http.ListenAndServe(*srvAddress, r))
 }
