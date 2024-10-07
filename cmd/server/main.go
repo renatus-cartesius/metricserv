@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )

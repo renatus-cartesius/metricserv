@@ -6,15 +6,16 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
 type ServerHandler struct {
-	storage storage.Storage
+	storage storage.Storager
 }
 
-func NewServerHandler(storage storage.Storage) *ServerHandler {
+func NewServerHandler(storage storage.Storager) *ServerHandler {
 	return &ServerHandler{
 		storage: storage,
 	}
