@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
@@ -14,15 +15,17 @@ type Agent struct {
 	pollInterval   int
 	serverURL      string
 	httpClient     *http.Client
+	exitCh         chan os.Signal
 }
 
-func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor) *Agent {
+func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor, exitCh chan os.Signal) *Agent {
 	return &Agent{
 		monitor:        monitor,
 		reportInterval: repoInterval,
 		pollInterval:   pollInterval,
 		serverURL:      serverURL,
 		httpClient:     &http.Client{},
+		exitCh:         exitCh,
 	}
 }
 
@@ -33,6 +36,9 @@ func (a *Agent) Serve() {
 
 	for {
 		select {
+		case <-a.exitCh:
+			fmt.Println("Shutting down agent...")
+			return
 		case <-pollTicker.C:
 			a.Poll()
 		case <-reportTicker.C:

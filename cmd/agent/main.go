@@ -3,13 +3,18 @@ package main
 import (
 	"flag"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	"github.com/renatus-cartesius/metricserv/internal/agent"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
 )
 
 func main() {
+
+	exitCh := make(chan os.Signal, 1)
+	signal.Notify(exitCh, os.Interrupt, syscall.SIGTERM)
 
 	srvAddress := flag.String("a", "localhost:8080", "address to metrics server")
 	if envSrvAddress := os.Getenv("ADDRESS"); envSrvAddress != "" {
@@ -35,6 +40,6 @@ func main() {
 	}
 	flag.Parse()
 
-	agent := agent.NewAgent(*reportInterval, *pollInterval, "http://"+*srvAddress, &monitor.MemMonitor{})
+	agent := agent.NewAgent(*reportInterval, *pollInterval, "http://"+*srvAddress, &monitor.MemMonitor{}, exitCh)
 	agent.Serve()
 }
