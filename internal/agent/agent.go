@@ -6,7 +6,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
+	"go.uber.org/zap"
 )
 
 type Agent struct {
@@ -31,13 +33,17 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.
 
 func (a *Agent) Serve() {
 
+	logger.Log.Info("starting agent")
+
 	reportTicker := time.NewTicker(time.Duration(a.reportInterval) * time.Second)
 	pollTicker := time.NewTicker(time.Duration(a.pollInterval) * time.Second)
 
 	for {
 		select {
 		case <-a.exitCh:
-			fmt.Println("Shutting down agent...")
+			logger.Log.Info(
+				"shutting down agent",
+			)
 			return
 		case <-pollTicker.C:
 			a.Poll()
@@ -55,22 +61,47 @@ func (a *Agent) Poll() {
 		nil,
 	)
 	if err != nil {
-		fmt.Printf("%v", err)
+		logger.Log.Error(
+			"error on preparing report request",
+			zap.String("metric", "PollCount"),
+			zap.Error(err),
+		)
 	}
 
 	req.Header.Set("Content-Type", "text/plain")
 	res, err := a.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("Error on sending metric %s:%d : %v\n", "PollCount", 1, err)
+		logger.Log.Error(
+			"error on sending metric",
+			zap.String("metric", "PollCount"),
+			zap.Error(err),
+		)
 		time.Sleep(time.Duration(a.pollInterval) * time.Second)
+		return
 	}
-	res.Body.Close()
-	fmt.Println("Sended: ", url, res.StatusCode)
+	err = res.Body.Close()
+	if err != nil {
+		logger.Log.Error(
+			"error on closing response body",
+			zap.String("metric", "PollCount"),
+			zap.Error(err),
+		)
+		return
+	}
+	logger.Log.Debug(
+		"metric sended",
+		zap.String("metric", "PollCount"),
+		zap.Int("value", 1),
+		zap.Int("status", res.StatusCode),
+	)
 }
 
 func (a *Agent) Report() {
 	if err := a.monitor.Flush(); err != nil {
-		fmt.Printf("%v", err)
+		logger.Log.Error(
+			"error when flusing monitor",
+			zap.Error(err),
+		)
 	}
 	stats := a.monitor.Get()
 	for m, v := range stats {
@@ -83,17 +114,30 @@ func (a *Agent) Report() {
 		)
 		req.Header.Set("Content-Type", "text/plain")
 		if err != nil {
-			fmt.Printf("%v", err)
+			logger.Log.Error(
+				"error on preparing report request",
+				zap.String("metric", m),
+				zap.Error(err),
+			)
 		}
 
 		res, err := a.httpClient.Do(req)
 		if err != nil {
-			fmt.Printf("Error on sending metric %s:%s : %v\n", m, v, err)
+			logger.Log.Error(
+				"error on sending metric",
+				zap.String("metric", m),
+				zap.Error(err),
+			)
 			continue
 		}
 		res.Body.Close()
 
-		fmt.Println("Sended: ", url, res.StatusCode)
+		logger.Log.Debug(
+			"metric sended",
+			zap.String("metric", m),
+			zap.String("value", v),
+			zap.Int("status", res.StatusCode),
+		)
 
 	}
 }

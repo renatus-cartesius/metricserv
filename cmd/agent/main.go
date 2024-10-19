@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/renatus-cartesius/metricserv/internal/agent"
+	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
 )
 
@@ -38,8 +39,15 @@ func main() {
 		}
 		*pollInterval = int(interval)
 	}
+
+	agentLogLevel := flag.String("l", "INFO", "logging level")
+	if envAgentLogInterval := os.Getenv("AGENT_LOG_LEVEL"); envAgentLogInterval != "" {
+		*agentLogLevel = envAgentLogInterval
+	}
 	flag.Parse()
 
+	logger.Initialize(*agentLogLevel)
 	agent := agent.NewAgent(*reportInterval, *pollInterval, "http://"+*srvAddress, &monitor.MemMonitor{}, exitCh)
+
 	agent.Serve()
 }
