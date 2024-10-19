@@ -2,6 +2,7 @@ package logger
 
 import (
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -25,14 +26,51 @@ func Initialize(level string) error {
 	return nil
 }
 
-func RequestLogger(h http.HandlerFunc) http.Handler {
+type responseData struct {
+	statusCode int
+	size       int
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	responseData *responseData
+}
+
+func (r *loggingResponseWriter) Write(b []byte) (int, error) {
+	size, err := r.ResponseWriter.Write(b)
+	r.responseData.size += size
+	return size, err
+}
+
+func (r *loggingResponseWriter) WriteHeader(statusCode int) {
+	r.ResponseWriter.WriteHeader(statusCode)
+	r.responseData.statusCode = statusCode
+}
+
+func RequestLogger(h http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		responseData := &responseData{}
+
+		lw := loggingResponseWriter{
+			ResponseWriter: w,
+			responseData:   responseData,
+		}
+
+		start := time.Now()
+
+		h(&lw, r)
+
+		duration := time.Since(start)
+
 		Log.Info(
-			"request",
+			"incoming request",
 			zap.String("method", r.Method),
-			zap.String("uri", r.URL.RawPath),
+			zap.String("uri", r.URL.Path),
+			zap.Int("status", lw.responseData.statusCode),
+			zap.Int("size", lw.responseData.size),
+			zap.Duration("time", duration),
 		)
 
-		h(w, r)
 	})
 }

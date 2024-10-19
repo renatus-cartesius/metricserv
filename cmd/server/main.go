@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
+	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
@@ -17,7 +19,14 @@ func main() {
 	if envSrvAddress := os.Getenv("ADDRESS"); envSrvAddress != "" {
 		*srvAddress = envSrvAddress
 	}
+
+	serverLogLevel := flag.String("l", "INFO", "logging level")
+	if envServerLogInterval := os.Getenv("SERVER_LOG_LEVEL"); envServerLogInterval != "" {
+		*serverLogLevel = envServerLogInterval
+	}
 	flag.Parse()
+
+	logger.Initialize(*serverLogLevel)
 
 	memStorage := storage.NewMemStorage()
 	srv := handlers.NewServerHandler(memStorage)
@@ -27,10 +36,17 @@ func main() {
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", srv.AllMetrics)
 		r.Get("/value/{type}/{name}", srv.GetValue)
-		r.Post("/update/{type}/{name}/{value}", srv.Update)
+		r.Route("/update", func(r chi.Router) {
+			r.Post("/{type}/{name}/{value}", logger.RequestLogger(srv.Update))
+		})
 	})
 
 	// r.Post("/update/{type}/{name}/{value}", srv.Update)
+
+	logger.Log.Info(
+		"starting server",
+		zap.String("address", *srvAddress),
+	)
 
 	log.Fatalln(http.ListenAndServe(*srvAddress, r))
 }
