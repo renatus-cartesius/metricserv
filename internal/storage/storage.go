@@ -15,7 +15,7 @@ type Storager interface {
 	Add(string, metrics.Metric) error
 	ListAll() (map[string]metrics.Metric, error)
 	CheckMetric(string) bool
-	Update(string, string, interface{}) error
+	Update(string, string, any) error
 	GetValue(string, string) string
 }
 
@@ -30,7 +30,7 @@ func NewMemStorage() Storager {
 	}
 }
 
-func (s *MemStorage) Update(mtype, name string, value interface{}) error {
+func (s *MemStorage) Update(mtype, name string, value any) error {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 

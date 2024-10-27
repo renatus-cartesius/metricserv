@@ -1,13 +1,17 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
+	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
+	"github.com/renatus-cartesius/metricserv/internal/server/models"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
@@ -132,4 +136,92 @@ func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(body))
+}
+
+func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
+
+	var metric models.Metric
+
+	if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
+		logger.Log.Error(
+			"error on unmarshaling request body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if !slices.Contains(metrics.AllowedTypes, metric.MType) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	switch metric.MType {
+	case metrics.TypeCounter:
+		delta := metric.Delta
+
+		if !srv.storage.CheckMetric(metric.ID) {
+			newMetric := &metrics.CounterMetric{
+				Name:  metric.ID,
+				Value: int64(0),
+			}
+			err := srv.storage.Add(metric.ID, newMetric)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+
+		err := srv.storage.Update(metric.MType, metric.ID, *delta)
+		if err != nil {
+			if err == storage.ErrWrongUpdateType {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	case metrics.TypeGauge:
+		value := metric.Value
+
+		if !srv.storage.CheckMetric(metric.ID) {
+			newMetric := &metrics.GaugeMetric{
+				Name:  metric.ID,
+				Value: float64(0),
+			}
+			err := srv.storage.Add(metric.ID, newMetric)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+
+		err := srv.storage.Update(metric.MType, metric.ID, *value)
+		if err != nil {
+			if err == storage.ErrWrongUpdateType {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
+	result, err := json.Marshal(metric)
+	if err != nil {
+		logger.Log.Error(
+			"error on marshaling result",
+			zap.String("err", err.Error()),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(result)
 }

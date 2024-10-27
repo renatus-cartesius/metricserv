@@ -37,6 +37,7 @@ func main() {
 		r.Get("/", srv.AllMetrics)
 		r.Get("/value/{type}/{name}", srv.GetValue)
 		r.Route("/update", func(r chi.Router) {
+			r.Post("/", logger.RequestLogger(srv.UpdateJSON))
 			r.Post("/{type}/{name}/{value}", logger.RequestLogger(srv.Update))
 		})
 	})
