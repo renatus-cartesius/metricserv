@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"math/rand"
 	"runtime"
 )
 
@@ -15,6 +16,7 @@ func (m *MemMonitor) Flush() error {
 }
 
 func (m *MemMonitor) Get() map[string]string {
+
 	stats := map[string]string{
 		"Alloc":         fmt.Sprintf("%f", float64(m.memStats.Alloc)),
 		"BuckHashSys":   fmt.Sprintf("%f", float64(m.memStats.BuckHashSys)),
@@ -43,6 +45,7 @@ func (m *MemMonitor) Get() map[string]string {
 		"StackSys":      fmt.Sprintf("%f", float64(m.memStats.StackSys)),
 		"Sys":           fmt.Sprintf("%f", float64(m.memStats.Sys)),
 		"TotalAlloc":    fmt.Sprintf("%f", float64(m.memStats.TotalAlloc)),
+		"RandomValue":   fmt.Sprintf("%f", rand.Float64()),
 	}
 
 	return stats

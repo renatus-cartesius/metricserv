@@ -34,8 +34,11 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Route("/", func(r chi.Router) {
-		r.Get("/", srv.AllMetrics)
-		r.Get("/value/{type}/{name}", srv.GetValue)
+		r.Get("/", logger.RequestLogger(srv.AllMetrics))
+		r.Route("/value", func(r chi.Router) {
+			r.Post("/", logger.RequestLogger(srv.GetValueJSON))
+			r.Get("/{type}/{name}", logger.RequestLogger(srv.GetValue))
+		})
 		r.Route("/update", func(r chi.Router) {
 			r.Post("/", logger.RequestLogger(srv.UpdateJSON))
 			r.Post("/{type}/{name}/{value}", logger.RequestLogger(srv.Update))

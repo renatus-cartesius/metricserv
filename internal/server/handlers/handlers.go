@@ -122,20 +122,52 @@ func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(value))
 }
 
-func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
-	allMetrics, err := srv.storage.ListAll()
+func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	var metric models.Metric
+
+	if err = json.NewDecoder(r.Body).Decode(&metric); err != nil {
+		logger.Log.Error(
+			"error on unmarshaling request body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if !srv.storage.CheckMetric(metric.ID) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	value := srv.storage.GetValue(metric.MType, metric.ID)
+	if value == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	switch metric.MType {
+	case metrics.TypeCounter:
+		metric.Delta = new(int64)
+		*metric.Delta, _ = strconv.ParseInt(value, 10, 64)
+	case metrics.TypeGauge:
+		metric.Value = new(float64)
+		*metric.Value, _ = strconv.ParseFloat(value, 64)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	result, err := json.Marshal(metric)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	body := ""
-	for _, v := range allMetrics {
-		body += v.String() + "\n"
-	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(body))
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(result)
 }
 
 func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +214,14 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		actualDelta, err := strconv.ParseInt(srv.storage.GetValue(metric.MType, metric.ID), 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		*metric.Delta = actualDelta
+
 	case metrics.TypeGauge:
 		value := metric.Value
 
@@ -222,6 +262,23 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
+}
+
+func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
+	allMetrics, err := srv.storage.ListAll()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	body := ""
+	for _, v := range allMetrics {
+		body += v.String() + "\n"
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(body))
 }

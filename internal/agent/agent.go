@@ -1,14 +1,19 @@
 package agent
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
-	"go.uber.org/zap"
+	"github.com/renatus-cartesius/metricserv/internal/server/models"
 )
 
 type Agent struct {
@@ -54,26 +59,48 @@ func (a *Agent) Serve() {
 }
 
 func (a *Agent) Poll() {
-	url := fmt.Sprintf("%s/update/counter/%s/%d", a.serverURL, "PollCount", 1)
+
+	metric := &models.Metric{
+		ID:    "PollCount",
+		MType: "counter",
+		Delta: new(int64),
+	}
+
+	*metric.Delta = 1
+
+	var metricJSON bytes.Buffer
+
+	if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
+		logger.Log.Error(
+			"error on marshaling metric",
+			zap.String("metric", metricJSON.String()),
+			zap.Error(err),
+		)
+		return
+	}
+
+	metricsDebug := metricJSON.Bytes()
+
+	url := fmt.Sprintf("%s/update", a.serverURL)
 	req, err := http.NewRequest(
 		http.MethodPost,
 		url,
-		nil,
+		&metricJSON,
 	)
 	if err != nil {
 		logger.Log.Error(
 			"error on preparing report request",
-			zap.String("metric", "PollCount"),
+			zap.String("metric", string(metricsDebug)),
 			zap.Error(err),
 		)
 	}
 
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/json")
 	res, err := a.httpClient.Do(req)
 	if err != nil {
 		logger.Log.Error(
 			"error on sending metric",
-			zap.String("metric", "PollCount"),
+			zap.String("metric", string(metricsDebug)),
 			zap.Error(err),
 		)
 		time.Sleep(time.Duration(a.pollInterval) * time.Second)
@@ -83,15 +110,14 @@ func (a *Agent) Poll() {
 	if err != nil {
 		logger.Log.Error(
 			"error on closing response body",
-			zap.String("metric", "PollCount"),
+			zap.String("metric", string(metricsDebug)),
 			zap.Error(err),
 		)
 		return
 	}
 	logger.Log.Debug(
 		"metric sended",
-		zap.String("metric", "PollCount"),
-		zap.Int("value", 1),
+		zap.String("metric", string(metricsDebug)),
 		zap.Int("status", res.StatusCode),
 	)
 }
@@ -106,17 +132,39 @@ func (a *Agent) Report() {
 	stats := a.monitor.Get()
 	for m, v := range stats {
 
-		url := fmt.Sprintf("%s/update/gauge/%s/%s", a.serverURL, m, v)
+		value, _ := strconv.ParseFloat(v, 64)
+
+		metric := &models.Metric{
+			ID:    m,
+			MType: "gauge",
+			Value: &value,
+		}
+
+		var metricJSON bytes.Buffer
+
+		if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
+			logger.Log.Error(
+				"error on marshaling metric",
+				zap.String("metric", metricJSON.String()),
+				zap.Error(err),
+			)
+			return
+		}
+
+		metricsDebug := metricJSON.Bytes()
+
+		url := fmt.Sprintf("%s/update", a.serverURL)
 		req, err := http.NewRequest(
 			http.MethodPost,
 			url,
-			nil,
+			&metricJSON,
 		)
-		req.Header.Set("Content-Type", "text/plain")
+
+		req.Header.Set("Content-Type", "application/json")
 		if err != nil {
 			logger.Log.Error(
 				"error on preparing report request",
-				zap.String("metric", m),
+				zap.String("metric", string(metricsDebug)),
 				zap.Error(err),
 			)
 		}
@@ -125,7 +173,7 @@ func (a *Agent) Report() {
 		if err != nil {
 			logger.Log.Error(
 				"error on sending metric",
-				zap.String("metric", m),
+				zap.String("metric", string(metricsDebug)),
 				zap.Error(err),
 			)
 			continue
@@ -134,8 +182,7 @@ func (a *Agent) Report() {
 
 		logger.Log.Debug(
 			"metric sended",
-			zap.String("metric", m),
-			zap.String("value", v),
+			zap.String("metric", string(metricsDebug)),
 			zap.Int("status", res.StatusCode),
 		)
 
