@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -25,14 +29,55 @@ func main() {
 	if envServerLogInterval := os.Getenv("SERVER_LOG_LEVEL"); envServerLogInterval != "" {
 		*serverLogLevel = envServerLogInterval
 	}
+
+	savePath := flag.String("f", "./storage.json", "path to storage file save")
+	if envSavePath := os.Getenv("FILE_STORAGE_PATH"); envSavePath != "" {
+		*savePath = envSavePath
+	}
+
+	saveInterval := flag.Int("i", 300, "interval to storage file save")
+	if envSaveInterval := os.Getenv("STORE_INTERVAL"); envSaveInterval != "" {
+		*saveInterval, _ = strconv.Atoi(envSaveInterval)
+	}
+
+	restoreStorage := flag.Bool("r", true, "if true restoring server from file")
+	if envRestoreStorage := os.Getenv("FILE_STORAGE_PATH"); envRestoreStorage != "" {
+		*restoreStorage, _ = strconv.ParseBool(envRestoreStorage)
+	}
+
 	flag.Parse()
 
 	logger.Initialize(*serverLogLevel)
 
-	memStorage := storage.NewMemStorage()
+	memStorage := storage.NewMemStorage(*savePath)
+
+	if *restoreStorage {
+		memStorage.Load()
+	}
+
+	if *saveInterval > 0 {
+
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+		saveTicker := time.NewTicker(time.Duration(*saveInterval) * time.Second)
+
+		go func() {
+			for {
+				select {
+				case <-sig:
+					return
+				case <-saveTicker.C:
+					memStorage.Save()
+				}
+			}
+
+		}()
+	}
+
 	srv := handlers.NewServerHandler(memStorage)
 
 	r := chi.NewRouter()
+	server := &http.Server{Addr: *srvAddress, Handler: r}
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
@@ -48,10 +93,53 @@ func main() {
 
 	// r.Post("/update/{type}/{name}/{value}", srv.Update)
 
+	serverCtx, serverStopCtx := context.WithCancel(context.Background())
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	go func() {
+		<-sig
+
+		logger.Log.Info(
+			"graceful shuting down",
+			zap.String("address", *srvAddress),
+		)
+
+		shutdownCtx, _ := context.WithTimeout(serverCtx, 30*time.Second)
+
+		go func() {
+			<-shutdownCtx.Done()
+			if shutdownCtx.Err() == context.DeadlineExceeded {
+				logger.Log.Fatal(
+					"graceful shutdown timed out",
+					zap.String("address", *srvAddress),
+				)
+			}
+		}()
+
+		err := server.Shutdown(shutdownCtx)
+		if err != nil {
+			logger.Log.Fatal(
+				"error on graceful shutdown",
+				zap.String("address", *srvAddress),
+			)
+		}
+
+		serverStopCtx()
+	}()
+
 	logger.Log.Info(
 		"starting server",
 		zap.String("address", *srvAddress),
 	)
 
-	log.Fatalln(http.ListenAndServe(*srvAddress, r))
+	err := server.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
+		panic(err)
+	}
+
+	if err = memStorage.Save(); err != nil {
+		panic(err)
+	}
 }

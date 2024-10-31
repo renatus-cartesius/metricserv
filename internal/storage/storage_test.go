@@ -26,7 +26,7 @@ func TestMemStorageAdd(t *testing.T) {
 		Value: gaugeValue,
 	}
 
-	storage := NewMemStorage()
+	storage := NewMemStorage("./storage")
 
 	storage.Add(counterName, counter)
 	storage.Add(gaugeName, gauge)
