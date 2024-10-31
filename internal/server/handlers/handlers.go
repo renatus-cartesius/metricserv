@@ -101,6 +101,7 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -119,6 +120,7 @@ func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(value))
 }
 
@@ -276,9 +278,9 @@ func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	body := ""
 	for _, v := range allMetrics {
-		body += v.String() + "\n"
+		body += "<p>" + v.String() + "</p>"
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(body))
 }
