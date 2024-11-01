@@ -195,10 +195,11 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		delta := metric.Delta
 
 		if !srv.storage.CheckMetric(metric.ID) {
-			newMetric := &metrics.CounterMetric{
-				Name:  metric.ID,
-				Value: int64(0),
-			}
+			// newMetric := &metrics.CounterMetric{
+			// 	Name:  metric.ID,
+			// 	Value: int64(0),
+			// }
+			newMetric := metrics.NewCounter(metric.ID, int64(0))
 			err := srv.storage.Add(metric.ID, newMetric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -228,10 +229,11 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		value := metric.Value
 
 		if !srv.storage.CheckMetric(metric.ID) {
-			newMetric := &metrics.GaugeMetric{
-				Name:  metric.ID,
-				Value: float64(0),
-			}
+			// newMetric := &metrics.GaugeMetric{
+			// 	Name:  metric.ID,
+			// 	Value: float64(0),
+			// }
+			newMetric := metrics.NewGauge(metric.ID, float64(0))
 			err := srv.storage.Add(metric.ID, newMetric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)

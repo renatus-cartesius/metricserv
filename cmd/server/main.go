@@ -41,13 +41,21 @@ func main() {
 	}
 
 	restoreStorage := flag.Bool("r", true, "if true restoring server from file")
-	if envRestoreStorage := os.Getenv("FILE_STORAGE_PATH"); envRestoreStorage != "" {
+	if envRestoreStorage := os.Getenv("RESTORE"); envRestoreStorage != "" {
 		*restoreStorage, _ = strconv.ParseBool(envRestoreStorage)
 	}
 
 	flag.Parse()
 
 	logger.Initialize(*serverLogLevel)
+
+	// file, _ := os.OpenFile("./storage.json", os.O_RDONLY, 0666)
+	// testStorage := &storage.MemStorage{}
+	// if err := json.NewDecoder(file).Decode(testStorage); err != nil {
+	// 	panic(err)
+	// }
+
+	// fmt.Println(testStorage)
 
 	memStorage := storage.NewMemStorage(*savePath)
 
@@ -139,7 +147,7 @@ func main() {
 		panic(err)
 	}
 
-	if err = memStorage.Save(); err != nil {
-		panic(err)
-	}
+	// if err = memStorage.Save(); err != nil {
+	// 	panic(err)
+	// }
 }

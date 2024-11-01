@@ -28,7 +28,7 @@ type Storager interface {
 
 type MemStorage struct {
 	mx       sync.RWMutex
-	Metrics  map[string]metrics.Metric
+	Metrics  map[string]metrics.Metric `json:"metrics"`
 	savePath string
 }
 
@@ -104,6 +104,11 @@ func (s *MemStorage) Load() error {
 		return err
 	}
 
+	logger.Log.Info(
+		"loading storage from file",
+		zap.String("filepath", s.savePath),
+	)
+
 	file, err := os.OpenFile(s.savePath, os.O_RDONLY, 0666)
 	if err != nil {
 		logger.Log.Error(
@@ -114,18 +119,38 @@ func (s *MemStorage) Load() error {
 	}
 	defer utils.CloseFile(file)
 
-	s.mx.Lock()
-	defer s.mx.Unlock()
+	// s.mx.Lock()
+	// defer s.mx.Unlock()
 
-	if err := json.NewDecoder(file).Decode(s); err != nil {
+	// var tmp map[string]models.AbstractMetric
+	var tmp interface{}
+
+	if err := json.NewDecoder(file).Decode(&tmp); err != nil {
 		logger.Log.Error(
 			"error on unmarshaling file to object for loading storage",
 			zap.Error(err),
 		)
-		return err
+		panic(err)
 	}
 
-	logger.Log.Debug(
+	for _, v := range tmp.(map[string]interface{})["metrics"].(map[string]interface{}) {
+		m := v.(map[string]interface{})
+		// m := v.(models.AbstractMetric)
+
+		switch m["type"].(string) {
+		case metrics.TypeCounter:
+			// fmt.Println(m)
+			counter := metrics.NewCounter(m["name"].(string), int64(m["value"].(float64)))
+			s.Add(m["name"].(string), counter)
+		case metrics.TypeGauge:
+			gauge := metrics.NewGauge(m["name"].(string), m["value"].(float64))
+			// fmt.Println(m)
+			s.Add(m["name"].(string), gauge)
+		}
+
+	}
+
+	logger.Log.Info(
 		"succesfully loaded storage from file",
 		zap.Int("metricsCount", len(s.Metrics)),
 	)
@@ -139,7 +164,7 @@ func (s *MemStorage) Save() error {
 		"saving storage to file",
 	)
 
-	file, err := os.OpenFile(s.savePath, os.O_WRONLY|os.O_CREATE, 0666)
+	file, err := os.OpenFile(s.savePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	defer utils.CloseFile(file)
 
 	if err != nil {

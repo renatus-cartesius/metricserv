@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/renatus-cartesius/metricserv/internal/logger"
+	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
 	"github.com/renatus-cartesius/metricserv/internal/server/models"
 )
@@ -62,11 +63,11 @@ func (a *Agent) Poll() {
 
 	metric := &models.Metric{
 		ID:    "PollCount",
-		MType: "counter",
+		MType: metrics.TypeCounter,
 		Delta: new(int64),
 	}
 
-	*metric.Delta = 1
+	// metric := metrics.NewCounter("PollCount", 1)
 
 	var metricJSON bytes.Buffer
 
@@ -136,7 +137,7 @@ func (a *Agent) Report() {
 
 		metric := &models.Metric{
 			ID:    m,
-			MType: "gauge",
+			MType: metrics.TypeGauge,
 			Value: &value,
 		}
 

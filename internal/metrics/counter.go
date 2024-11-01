@@ -3,9 +3,17 @@ package metrics
 import "fmt"
 
 type CounterMetric struct {
-	Name  string
-	Value int64
-	Type  string
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+	Type  string `json:"type"`
+}
+
+func NewCounter(name string, value int64) *CounterMetric {
+	return &CounterMetric{
+		Name:  name,
+		Value: value,
+		Type:  "counter",
+	}
 }
 
 func (m CounterMetric) String() string {
