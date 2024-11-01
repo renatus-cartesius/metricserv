@@ -114,7 +114,7 @@ func main() {
 			zap.String("address", *srvAddress),
 		)
 
-		shutdownCtx, _ := context.WithTimeout(serverCtx, 30*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(serverCtx, 30*time.Second)
 
 		go func() {
 			<-shutdownCtx.Done()
@@ -135,6 +135,7 @@ func main() {
 		}
 
 		serverStopCtx()
+		shutdownCancel()
 	}()
 
 	logger.Log.Info(
@@ -147,7 +148,7 @@ func main() {
 		panic(err)
 	}
 
-	// if err = memStorage.Save(); err != nil {
-	// 	panic(err)
-	// }
+	if err = memStorage.Save(); err != nil {
+		panic(err)
+	}
 }

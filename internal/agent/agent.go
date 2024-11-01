@@ -67,6 +67,8 @@ func (a *Agent) Poll() {
 		Delta: new(int64),
 	}
 
+	*metric.Delta = 1
+
 	// metric := metrics.NewCounter("PollCount", 1)
 
 	var metricJSON bytes.Buffer
