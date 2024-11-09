@@ -2,51 +2,30 @@ package main
 
 import (
 	"context"
-	"flag"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/renatus-cartesius/metricserv/cmd/server/config"
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
 func main() {
-	srvAddress := flag.String("a", "localhost:8080", "address to metrics server")
-	if envSrvAddress := os.Getenv("ADDRESS"); envSrvAddress != "" {
-		*srvAddress = envSrvAddress
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalln(err)
 	}
 
-	serverLogLevel := flag.String("l", "INFO", "logging level")
-	if envServerLogInterval := os.Getenv("SERVER_LOG_LEVEL"); envServerLogInterval != "" {
-		*serverLogLevel = envServerLogInterval
-	}
-
-	savePath := flag.String("f", "./storage.json", "path to storage file save")
-	if envSavePath := os.Getenv("FILE_STORAGE_PATH"); envSavePath != "" {
-		*savePath = envSavePath
-	}
-
-	saveInterval := flag.Int("i", 300, "interval to storage file save")
-	if envSaveInterval := os.Getenv("STORE_INTERVAL"); envSaveInterval != "" {
-		*saveInterval, _ = strconv.Atoi(envSaveInterval)
-	}
-
-	restoreStorage := flag.Bool("r", true, "if true restoring server from file")
-	if envRestoreStorage := os.Getenv("RESTORE"); envRestoreStorage != "" {
-		*restoreStorage, _ = strconv.ParseBool(envRestoreStorage)
-	}
-
-	flag.Parse()
-
-	logger.Initialize(*serverLogLevel)
+	logger.Initialize(cfg.ServerLogLevel)
 
 	// file, _ := os.OpenFile("./storage.json", os.O_RDONLY, 0666)
 	// testStorage := &storage.MemStorage{}
@@ -56,17 +35,17 @@ func main() {
 
 	// fmt.Println(testStorage)
 
-	memStorage := storage.NewMemStorage(*savePath)
+	memStorage := storage.NewMemStorage(cfg.SavePath)
 
-	if *restoreStorage {
+	if cfg.RestoreStorage {
 		memStorage.Load()
 	}
 
-	if *saveInterval > 0 {
+	if cfg.SaveInterval > 0 {
 
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-		saveTicker := time.NewTicker(time.Duration(*saveInterval) * time.Second)
+		saveTicker := time.NewTicker(time.Duration(cfg.SaveInterval) * time.Second)
 
 		go func() {
 			for {
@@ -84,7 +63,7 @@ func main() {
 	srv := handlers.NewServerHandler(memStorage)
 
 	r := chi.NewRouter()
-	server := &http.Server{Addr: *srvAddress, Handler: r}
+	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
 
 	handlers.Setup(r, srv)
 
@@ -98,7 +77,7 @@ func main() {
 
 		logger.Log.Info(
 			"graceful shuting down",
-			zap.String("address", *srvAddress),
+			zap.String("address", cfg.SrvAddress),
 		)
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(serverCtx, 30*time.Second)
@@ -108,7 +87,7 @@ func main() {
 			if shutdownCtx.Err() == context.DeadlineExceeded {
 				logger.Log.Fatal(
 					"graceful shutdown timed out",
-					zap.String("address", *srvAddress),
+					zap.String("address", cfg.SrvAddress),
 				)
 			}
 		}()
@@ -117,7 +96,7 @@ func main() {
 		if err != nil {
 			logger.Log.Fatal(
 				"error on graceful shutdown",
-				zap.String("address", *srvAddress),
+				zap.String("address", cfg.SrvAddress),
 			)
 		}
 
@@ -127,10 +106,10 @@ func main() {
 
 	logger.Log.Info(
 		"starting server",
-		zap.String("address", *srvAddress),
+		zap.String("address", cfg.SrvAddress),
 	)
 
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
 		panic(err)
 	}
