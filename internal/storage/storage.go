@@ -32,11 +32,11 @@ type MemStorage struct {
 	savePath string
 }
 
-func NewMemStorage(savePath string) Storager {
+func NewMemStorage(savePath string) (Storager, error) {
 	return &MemStorage{
 		Metrics:  make(map[string]metrics.Metric, 0),
 		savePath: savePath,
-	}
+	}, nil
 }
 
 func (s *MemStorage) Update(mtype, name string, value any) error {

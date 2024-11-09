@@ -26,24 +26,30 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	logger.Initialize(cfg.ServerLogLevel)
+	if err := logger.Initialize(cfg.ServerLogLevel); err != nil {
+		log.Fatalln(err)
+	}
 
-	memStorage := storage.NewMemStorage(cfg.SavePath)
+	memStorage, err := storage.NewMemStorage(cfg.SavePath)
+	if err != nil {
+		log.Fatalln("error on creating new storage")
+	}
 
 	if cfg.RestoreStorage {
 		memStorage.Load()
 	}
 
+	saveSig := make(chan os.Signal, 1)
+	signal.Notify(saveSig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	if cfg.SaveInterval > 0 {
 
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 		saveTicker := time.NewTicker(time.Duration(cfg.SaveInterval) * time.Second)
 
 		go func() {
 			for {
 				select {
-				case <-sig:
+				case <-saveSig:
 					return
 				case <-saveTicker.C:
 					if err := memStorage.Save(); err != nil {
@@ -63,12 +69,13 @@ func main() {
 	handlers.Setup(r, srv)
 
 	serverCtx, serverStopCtx := context.WithCancel(context.Background())
+	defer serverStopCtx()
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	shutdownSig := make(chan os.Signal, 1)
+	signal.Notify(shutdownSig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go func() {
-		<-sig
+		<-shutdownSig
 
 		logger.Log.Info(
 			"graceful shuting down",
@@ -76,6 +83,7 @@ func main() {
 		)
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(serverCtx, 30*time.Second)
+		defer shutdownCancel()
 
 		go func() {
 			<-shutdownCtx.Done()
@@ -95,8 +103,6 @@ func main() {
 			)
 		}
 
-		serverStopCtx()
-		shutdownCancel()
 	}()
 
 	logger.Log.Info(

@@ -26,7 +26,10 @@ func TestMemStorageAdd(t *testing.T) {
 		Value: gaugeValue,
 	}
 
-	storage := NewMemStorage("./storage")
+	storage, err := NewMemStorage("./storage")
+	if err != nil {
+		t.Fatalf("error on creating new storage\n")
+	}
 
 	storage.Add(counterName, counter)
 	storage.Add(gaugeName, gauge)
