@@ -36,7 +36,9 @@ func main() {
 	}
 
 	if cfg.RestoreStorage {
-		memStorage.Load()
+		if err := memStorage.Load(); err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	saveSig := make(chan os.Signal, 1)
@@ -45,6 +47,7 @@ func main() {
 	if cfg.SaveInterval > 0 {
 
 		saveTicker := time.NewTicker(time.Duration(cfg.SaveInterval) * time.Second)
+		defer saveTicker.Stop()
 
 		go func() {
 			for {
@@ -53,7 +56,10 @@ func main() {
 					return
 				case <-saveTicker.C:
 					if err := memStorage.Save(); err != nil {
-						log.Fatalln(err)
+						logger.Log.Error(
+							"error on saving storage",
+							zap.Error(err),
+						)
 					}
 				}
 			}

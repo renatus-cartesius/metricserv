@@ -48,7 +48,7 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	metricValue := chi.URLParam(r, "value")
 
 	if !slices.Contains(metrics.AllowedTypes, metricType) {
-		logger.Log.Info(
+		logger.Log.Warn(
 			"passed type is not allowed",
 			zap.String("type", metricType),
 		)
@@ -179,6 +179,7 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 				"error on parsing value",
 				zap.Error(err),
 			)
+			return
 		}
 	case metrics.TypeGauge:
 		metric.Value = new(float64)
@@ -188,6 +189,7 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 				"error on parsing value",
 				zap.Error(err),
 			)
+			return
 		}
 	default:
 		w.WriteHeader(http.StatusBadRequest)
