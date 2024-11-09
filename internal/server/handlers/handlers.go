@@ -11,9 +11,25 @@ import (
 
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
+	"github.com/renatus-cartesius/metricserv/internal/server/middlewares"
 	"github.com/renatus-cartesius/metricserv/internal/server/models"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
+
+func Setup(r *chi.Mux, srv *ServerHandler) {
+
+	r.Route("/", func(r chi.Router) {
+		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
+		r.Route("/value", func(r chi.Router) {
+			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
+			r.Get("/{type}/{name}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
+		})
+		r.Route("/update", func(r chi.Router) {
+			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))
+			r.Post("/{type}/{name}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
+		})
+	})
+}
 
 type ServerHandler struct {
 	storage storage.Storager
@@ -32,6 +48,10 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	metricValue := chi.URLParam(r, "value")
 
 	if !slices.Contains(metrics.AllowedTypes, metricType) {
+		logger.Log.Info(
+			"passed type is not allowed",
+			zap.String("type", metricType),
+		)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -135,7 +155,7 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 			"error on unmarshaling request body",
 			zap.Error(err),
 		)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -153,10 +173,22 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 	switch metric.MType {
 	case metrics.TypeCounter:
 		metric.Delta = new(int64)
-		*metric.Delta, _ = strconv.ParseInt(value, 10, 64)
+		*metric.Delta, err = strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			logger.Log.Error(
+				"error on parsing value",
+				zap.Error(err),
+			)
+		}
 	case metrics.TypeGauge:
 		metric.Value = new(float64)
-		*metric.Value, _ = strconv.ParseFloat(value, 64)
+		*metric.Value, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			logger.Log.Error(
+				"error on parsing value",
+				zap.Error(err),
+			)
+		}
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -181,7 +213,7 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			"error on unmarshaling request body",
 			zap.Error(err),
 		)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -195,10 +227,6 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		delta := metric.Delta
 
 		if !srv.storage.CheckMetric(metric.ID) {
-			// newMetric := &metrics.CounterMetric{
-			// 	Name:  metric.ID,
-			// 	Value: int64(0),
-			// }
 			newMetric := metrics.NewCounter(metric.ID, int64(0))
 			err := srv.storage.Add(metric.ID, newMetric)
 			if err != nil {
@@ -229,10 +257,6 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		value := metric.Value
 
 		if !srv.storage.CheckMetric(metric.ID) {
-			// newMetric := &metrics.GaugeMetric{
-			// 	Name:  metric.ID,
-			// 	Value: float64(0),
-			// }
 			newMetric := metrics.NewGauge(metric.ID, float64(0))
 			err := srv.storage.Add(metric.ID, newMetric)
 			if err != nil {

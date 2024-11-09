@@ -15,7 +15,6 @@ import (
 
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
-	"github.com/renatus-cartesius/metricserv/internal/server/middlewares"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
@@ -87,19 +86,7 @@ func main() {
 	r := chi.NewRouter()
 	server := &http.Server{Addr: *srvAddress, Handler: r}
 
-	r.Route("/", func(r chi.Router) {
-		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
-		r.Route("/value", func(r chi.Router) {
-			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
-			r.Get("/{type}/{name}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
-		})
-		r.Route("/update", func(r chi.Router) {
-			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))
-			r.Post("/{type}/{name}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
-		})
-	})
-
-	// r.Post("/update/{type}/{name}/{value}", srv.Update)
+	handlers.Setup(r, srv)
 
 	serverCtx, serverStopCtx := context.WithCancel(context.Background())
 
