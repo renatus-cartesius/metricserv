@@ -70,8 +70,7 @@ func (s *MemStorage) CheckMetric(name string) bool {
 func (s *MemStorage) ListAll() (map[string]metrics.Metric, error) {
 	s.mx.RLock()
 	defer s.mx.RUnlock()
-	metrics := s.Metrics
-	return metrics, nil
+	return s.Metrics, nil
 }
 
 func (s *MemStorage) GetValue(mtype, name string) string {
@@ -117,7 +116,7 @@ func (s *MemStorage) Load() error {
 		)
 		return err
 	}
-	defer utils.CloseFile(file)
+	defer utils.SafeClose(file)
 
 	// s.mx.Lock()
 	// defer s.mx.Unlock()
@@ -130,7 +129,7 @@ func (s *MemStorage) Load() error {
 			"error on unmarshaling file to object for loading storage",
 			zap.Error(err),
 		)
-		panic(err)
+		return err
 	}
 
 	for _, v := range tmp.(map[string]interface{})["metrics"].(map[string]interface{}) {
@@ -165,7 +164,7 @@ func (s *MemStorage) Save() error {
 	)
 
 	file, err := os.OpenFile(s.savePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-	defer utils.CloseFile(file)
+	defer utils.SafeClose(file)
 
 	if err != nil {
 		logger.Log.Error(

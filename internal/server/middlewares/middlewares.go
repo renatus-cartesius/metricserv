@@ -21,8 +21,6 @@ func newGzipWriter(w http.ResponseWriter) *gzipWriter {
 
 func (gw *gzipWriter) Write(b []byte) (int, error) {
 
-	gw.Header().Get("Content-Type")
-
 	return gw.zw.Write(b)
 }
 
@@ -78,7 +76,7 @@ func Gzipper(h http.HandlerFunc) http.HandlerFunc {
 			gw := newGzipWriter(w)
 			ow = gw
 
-			w.Header().Add("Content-Encoding", "gzip")
+			w.Header().Set("Content-Encoding", "gzip")
 
 			defer gw.Close()
 		}

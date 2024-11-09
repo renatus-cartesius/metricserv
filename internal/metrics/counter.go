@@ -12,12 +12,12 @@ func NewCounter(name string, value int64) *CounterMetric {
 	return &CounterMetric{
 		Name:  name,
 		Value: value,
-		Type:  "counter",
+		Type:  TypeCounter,
 	}
 }
 
 func (m CounterMetric) String() string {
-	return fmt.Sprintf("counter:%s:%d", m.Name, m.Value)
+	return fmt.Sprintf("%s:%s:%d", TypeCounter, m.Name, m.Value)
 }
 
 func (m *CounterMetric) Change(value interface{}) error {

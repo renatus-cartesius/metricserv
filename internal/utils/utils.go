@@ -1,18 +1,19 @@
 package utils
 
 import (
-	"os"
+	"io"
+	"reflect"
 
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"go.uber.org/zap"
 )
 
-func CloseFile(file *os.File) {
-	err := file.Close()
+func SafeClose(closer io.Closer) {
+	err := closer.Close()
 	if err != nil {
-		logger.Log.Fatal(
-			"error on closing file",
-			zap.String("filepath", file.Name()),
+		logger.Log.Error(
+			"error on closing",
+			zap.String("closer", reflect.ValueOf(closer).String()),
 		)
 	}
 }

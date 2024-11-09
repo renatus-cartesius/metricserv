@@ -12,7 +12,7 @@ func NewGauge(name string, value float64) *GaugeMetric {
 	return &GaugeMetric{
 		Name:  name,
 		Value: value,
-		Type:  "gauge",
+		Type:  TypeGauge,
 	}
 }
 func (m *GaugeMetric) Change(value interface{}) error {
@@ -20,7 +20,7 @@ func (m *GaugeMetric) Change(value interface{}) error {
 	return nil
 }
 func (m GaugeMetric) String() string {
-	return fmt.Sprintf("gauge:%s:%f", m.Name, m.Value)
+	return fmt.Sprintf("%s:%s:%f", TypeGauge, m.Name, m.Value)
 }
 
 func (m *GaugeMetric) GetValue() string {
