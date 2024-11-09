@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -27,14 +28,6 @@ func main() {
 
 	logger.Initialize(cfg.ServerLogLevel)
 
-	// file, _ := os.OpenFile("./storage.json", os.O_RDONLY, 0666)
-	// testStorage := &storage.MemStorage{}
-	// if err := json.NewDecoder(file).Decode(testStorage); err != nil {
-	// 	panic(err)
-	// }
-
-	// fmt.Println(testStorage)
-
 	memStorage := storage.NewMemStorage(cfg.SavePath)
 
 	if cfg.RestoreStorage {
@@ -53,7 +46,9 @@ func main() {
 				case <-sig:
 					return
 				case <-saveTicker.C:
-					memStorage.Save()
+					if err := memStorage.Save(); err != nil {
+						log.Fatalln(err)
+					}
 				}
 			}
 
@@ -110,11 +105,11 @@ func main() {
 	)
 
 	err = server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		panic(err)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalln(err)
 	}
 
 	if err = memStorage.Save(); err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 }
