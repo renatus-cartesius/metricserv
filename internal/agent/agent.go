@@ -17,6 +17,10 @@ import (
 	"github.com/renatus-cartesius/metricserv/internal/server/models"
 )
 
+const (
+	updateURI = "/update"
+)
+
 type Agent struct {
 	monitor        monitor.Monitor
 	reportInterval int
@@ -42,7 +46,10 @@ func (a *Agent) Serve() {
 	logger.Log.Info("starting agent")
 
 	reportTicker := time.NewTicker(time.Duration(a.reportInterval) * time.Second)
+	defer reportTicker.Stop()
+
 	pollTicker := time.NewTicker(time.Duration(a.pollInterval) * time.Second)
+	defer pollTicker.Stop()
 
 	for {
 		select {
@@ -69,14 +76,13 @@ func (a *Agent) Poll() {
 
 	*metric.Delta = 1
 
-	// metric := metrics.NewCounter("PollCount", 1)
-
 	var metricJSON bytes.Buffer
 
 	if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
 		logger.Log.Error(
 			"error on marshaling metric",
 			zap.String("metric", metricJSON.String()),
+			zap.String("metricID", metric.ID),
 			zap.Error(err),
 		)
 		return
@@ -84,40 +90,35 @@ func (a *Agent) Poll() {
 
 	metricsDebug := metricJSON.Bytes()
 
-	url := fmt.Sprintf("%s/update", a.serverURL)
+	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
 	req, err := http.NewRequest(
 		http.MethodPost,
 		url,
 		&metricJSON,
 	)
+
 	if err != nil {
 		logger.Log.Error(
 			"error on preparing report request",
-			zap.String("metric", string(metricsDebug)),
+			zap.String("metric", metricJSON.String()),
 			zap.Error(err),
 		)
+		return
 	}
-
 	req.Header.Set("Content-Type", "application/json")
+
 	res, err := a.httpClient.Do(req)
 	if err != nil {
 		logger.Log.Error(
 			"error on sending metric",
-			zap.String("metric", string(metricsDebug)),
+			zap.String("metric", metricJSON.String()),
 			zap.Error(err),
 		)
 		time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		return
 	}
-	err = res.Body.Close()
-	if err != nil {
-		logger.Log.Error(
-			"error on closing response body",
-			zap.String("metric", string(metricsDebug)),
-			zap.Error(err),
-		)
-		return
-	}
+	defer res.Body.Close()
+
 	logger.Log.Debug(
 		"metric sended",
 		zap.String("metric", string(metricsDebug)),
@@ -149,6 +150,7 @@ func (a *Agent) Report() {
 			logger.Log.Error(
 				"error on marshaling metric",
 				zap.String("metric", metricJSON.String()),
+				zap.String("metricID", metric.ID),
 				zap.Error(err),
 			)
 			return
@@ -156,21 +158,22 @@ func (a *Agent) Report() {
 
 		metricsDebug := metricJSON.Bytes()
 
-		url := fmt.Sprintf("%s/update", a.serverURL)
+		url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
 		req, err := http.NewRequest(
 			http.MethodPost,
 			url,
 			&metricJSON,
 		)
 
-		req.Header.Set("Content-Type", "application/json")
 		if err != nil {
 			logger.Log.Error(
 				"error on preparing report request",
 				zap.String("metric", string(metricsDebug)),
 				zap.Error(err),
 			)
+			return
 		}
+		req.Header.Set("Content-Type", "application/json")
 
 		res, err := a.httpClient.Do(req)
 		if err != nil {
@@ -181,7 +184,7 @@ func (a *Agent) Report() {
 			)
 			continue
 		}
-		res.Body.Close()
+		defer res.Body.Close()
 
 		logger.Log.Debug(
 			"metric sended",
