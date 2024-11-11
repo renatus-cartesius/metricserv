@@ -136,7 +136,14 @@ func (a *Agent) Report() {
 	stats := a.monitor.Get()
 	for m, v := range stats {
 
-		value, _ := strconv.ParseFloat(v, 64)
+		value, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			logger.Log.Error(
+				"error when parsing float value",
+				zap.Error(err),
+			)
+			continue
+		}
 
 		metric := &models.Metric{
 			ID:    m,
