@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
@@ -30,13 +31,14 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	memStorage, err := storage.NewMemStorage(cfg.SavePath)
+	// pgStorage, err := storage.NewMemStorage(cfg.SavePath)
+	pgStorage, err := storage.NewPGStorage(cfg.DBDsn)
 	if err != nil {
 		log.Fatalln("error on creating new storage")
 	}
 
 	if cfg.RestoreStorage {
-		if err := memStorage.Load(); err != nil {
+		if err := pgStorage.Load(); err != nil {
 			log.Fatalln(err)
 		}
 	}
@@ -55,7 +57,7 @@ func main() {
 				case <-saveSig:
 					return
 				case <-saveTicker.C:
-					if err := memStorage.Save(); err != nil {
+					if err := pgStorage.Save(); err != nil {
 						logger.Log.Error(
 							"error on saving storage",
 							zap.Error(err),
@@ -67,7 +69,7 @@ func main() {
 		}()
 	}
 
-	srv := handlers.NewServerHandler(memStorage)
+	srv := handlers.NewServerHandler(pgStorage)
 
 	r := chi.NewRouter()
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
@@ -121,7 +123,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err = memStorage.Save(); err != nil {
+	if err = pgStorage.Save(); err != nil {
 		log.Fatalln(err)
 	}
 }
