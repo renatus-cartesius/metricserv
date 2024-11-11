@@ -17,6 +17,7 @@ import (
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
+	"github.com/renatus-cartesius/metricserv/internal/server/middlewares"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
@@ -31,14 +32,18 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// pgStorage, err := storage.NewMemStorage(cfg.SavePath)
+	memStorage, err := storage.NewMemStorage(cfg.SavePath)
+	if err != nil {
+		log.Fatalln("error on creating memory storage")
+	}
+
 	pgStorage, err := storage.NewPGStorage(cfg.DBDsn)
 	if err != nil {
-		log.Fatalln("error on creating new storage")
+		log.Fatalln("error on creating postgresql storage")
 	}
 
 	if cfg.RestoreStorage {
-		if err := pgStorage.Load(); err != nil {
+		if err := memStorage.Load(); err != nil {
 			log.Fatalln(err)
 		}
 	}
@@ -57,7 +62,7 @@ func main() {
 				case <-saveSig:
 					return
 				case <-saveTicker.C:
-					if err := pgStorage.Save(); err != nil {
+					if err := memStorage.Save(); err != nil {
 						logger.Log.Error(
 							"error on saving storage",
 							zap.Error(err),
@@ -69,10 +74,18 @@ func main() {
 		}()
 	}
 
-	srv := handlers.NewServerHandler(pgStorage)
+	srv := handlers.NewServerHandler(memStorage)
 
 	r := chi.NewRouter()
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
+
+	r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(func(w http.ResponseWriter, r *http.Request) {
+		if ok := pgStorage.Ping(); !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})))
 
 	handlers.Setup(r, srv)
 
@@ -123,7 +136,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err = pgStorage.Save(); err != nil {
+	if err = memStorage.Save(); err != nil {
 		log.Fatalln(err)
 	}
 }

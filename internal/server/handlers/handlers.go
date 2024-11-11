@@ -20,7 +20,7 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
-		r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
+		// r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
 		r.Route("/value", func(r chi.Router) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
 			r.Get("/{type}/{name}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
@@ -315,7 +315,7 @@ func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv ServerHandler) Ping(w http.ResponseWriter, r *http.Request) {
-	if err := srv.storage.Ping(); err == false {
+	if ok := srv.storage.Ping(); !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(http.StatusOK)

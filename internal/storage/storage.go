@@ -207,14 +207,14 @@ func NewPGStorage(dsn string) (Storager, error) {
 	}, nil
 }
 
-func (pg *PGStorage) Close() {
-	if err := pg.db.Close(); err != nil {
+func (pgs *PGStorage) Close() {
+	if err := pgs.db.Close(); err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func (s *PGStorage) Ping() bool {
-	if err := s.db.Ping(); err != nil {
+func (pgs *PGStorage) Ping() bool {
+	if err := pgs.db.Ping(); err != nil {
 		logger.Log.Error(
 			"error on ping postgresql database server",
 			zap.Error(err),
@@ -227,24 +227,24 @@ func (s *PGStorage) Ping() bool {
 	return true
 }
 
-func (pg *PGStorage) Add(string, metrics.Metric) error {
+func (pgs *PGStorage) Add(string, metrics.Metric) error {
 	return nil
 }
-func (pg *PGStorage) ListAll() (map[string]metrics.Metric, error) {
+func (pgs *PGStorage) ListAll() (map[string]metrics.Metric, error) {
 	return nil, nil
 }
-func (pg *PGStorage) CheckMetric(string) bool {
+func (pgs *PGStorage) CheckMetric(string) bool {
 	return true
 }
-func (pg *PGStorage) Update(string, string, any) error {
+func (pgs *PGStorage) Update(string, string, any) error {
 	return nil
 }
-func (pg *PGStorage) GetValue(string, string) string {
+func (pgs *PGStorage) GetValue(string, string) string {
 	return ""
 }
-func (pg *PGStorage) Save() error {
+func (pgs *PGStorage) Save() error {
 	return nil
 }
-func (pg *PGStorage) Load() error {
+func (pgs *PGStorage) Load() error {
 	return nil
 }
