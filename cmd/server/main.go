@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
+	"github.com/renatus-cartesius/metricserv/internal/server/middlewares"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
@@ -32,7 +34,12 @@ func main() {
 
 	memStorage, err := storage.NewMemStorage(cfg.SavePath)
 	if err != nil {
-		log.Fatalln("error on creating new storage")
+		log.Fatalln("error on creating memory storage")
+	}
+
+	pgStorage, err := storage.NewPGStorage(cfg.DBDsn)
+	if err != nil {
+		log.Fatalln("error on creating postgresql storage")
 	}
 
 	if cfg.RestoreStorage {
@@ -71,6 +78,14 @@ func main() {
 
 	r := chi.NewRouter()
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
+
+	r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(func(w http.ResponseWriter, r *http.Request) {
+		if ok := pgStorage.Ping(); !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})))
 
 	handlers.Setup(r, srv)
 

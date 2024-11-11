@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"sync"
 
@@ -24,9 +26,11 @@ type Storager interface {
 	GetValue(string, string) string
 	Save() error
 	Load() error
+	Ping() bool
 }
 
 type MemStorage struct {
+	Storager
 	mx       sync.RWMutex
 	Metrics  map[string]metrics.Metric `json:"metrics"`
 	savePath string
@@ -180,5 +184,67 @@ func (s *MemStorage) Save() error {
 		return err
 	}
 
+	return nil
+}
+
+func (s *MemStorage) Ping() bool {
+	return true
+}
+
+type PGStorage struct {
+	Storager
+	db *sql.DB
+}
+
+func NewPGStorage(dsn string) (Storager, error) {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	return &PGStorage{
+		db: db,
+	}, nil
+}
+
+func (pgs *PGStorage) Close() {
+	if err := pgs.db.Close(); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func (pgs *PGStorage) Ping() bool {
+	if err := pgs.db.Ping(); err != nil {
+		logger.Log.Error(
+			"error on ping postgresql database server",
+			zap.Error(err),
+		)
+		return false
+	}
+	logger.Log.Debug(
+		"connection to postgresql database server is alive",
+	)
+	return true
+}
+
+func (pgs *PGStorage) Add(string, metrics.Metric) error {
+	return nil
+}
+func (pgs *PGStorage) ListAll() (map[string]metrics.Metric, error) {
+	return nil, nil
+}
+func (pgs *PGStorage) CheckMetric(string) bool {
+	return true
+}
+func (pgs *PGStorage) Update(string, string, any) error {
+	return nil
+}
+func (pgs *PGStorage) GetValue(string, string) string {
+	return ""
+}
+func (pgs *PGStorage) Save() error {
+	return nil
+}
+func (pgs *PGStorage) Load() error {
 	return nil
 }
