@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -20,14 +21,14 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
-		// r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
+		r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
 		r.Route("/value", func(r chi.Router) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
-			r.Get("/{type}/{name}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
+			r.Get("/{type}/{id}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
 		})
 		r.Route("/update", func(r chi.Router) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))
-			r.Post("/{type}/{name}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
+			r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
 		})
 	})
 }
@@ -45,7 +46,7 @@ func NewServerHandler(storage storage.Storager) *ServerHandler {
 func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	metricType := chi.URLParam(r, "type")
-	metricName := chi.URLParam(r, "name")
+	metricID := chi.URLParam(r, "id")
 	metricValue := chi.URLParam(r, "value")
 
 	if !slices.Contains(metrics.AllowedTypes, metricType) {
@@ -66,19 +67,19 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !srv.storage.CheckMetric(metricName) {
+		if !srv.storage.CheckMetric(r.Context(), metricID) {
 			metric := &metrics.CounterMetric{
-				Name:  metricName,
+				ID:    metricID,
 				Value: int64(0),
 			}
-			err := srv.storage.Add(metricName, metric)
+			err := srv.storage.Add(r.Context(), metricID, metric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err = srv.storage.Update(metricType, metricName, value)
+		err = srv.storage.Update(r.Context(), metricType, metricID, value)
 		if err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
@@ -96,19 +97,19 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !srv.storage.CheckMetric(metricName) {
+		if !srv.storage.CheckMetric(r.Context(), metricID) {
 			metric := &metrics.GaugeMetric{
-				Name:  metricName,
+				ID:    metricID,
 				Value: float64(0),
 			}
-			err := srv.storage.Add(metricName, metric)
+			err := srv.storage.Add(r.Context(), metricID, metric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err = srv.storage.Update(metricType, metricName, value)
+		err = srv.storage.Update(r.Context(), metricType, metricID, value)
 		if err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
@@ -128,14 +129,14 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
-	metricName := chi.URLParam(r, "name")
+	metricID := chi.URLParam(r, "id")
 
-	if !srv.storage.CheckMetric(metricName) {
+	if !srv.storage.CheckMetric(r.Context(), metricID) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	value := srv.storage.GetValue(metricType, metricName)
+	value := srv.storage.GetValue(r.Context(), metricType, metricID)
 	if value == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -160,12 +161,12 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !srv.storage.CheckMetric(metric.ID) {
+	if !srv.storage.CheckMetric(r.Context(), metric.ID) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	value := srv.storage.GetValue(metric.MType, metric.ID)
+	value := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
 	if value == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -229,16 +230,17 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	case metrics.TypeCounter:
 		delta := metric.Delta
 
-		if !srv.storage.CheckMetric(metric.ID) {
+		if !srv.storage.CheckMetric(r.Context(), metric.ID) {
+			fmt.Println("Creating new counter", metric.ID)
 			newMetric := metrics.NewCounter(metric.ID, int64(0))
-			err := srv.storage.Add(metric.ID, newMetric)
+			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err := srv.storage.Update(metric.MType, metric.ID, *delta)
+		err := srv.storage.Update(r.Context(), metric.MType, metric.ID, *delta)
 		if err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
@@ -248,7 +250,7 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		actualDelta, err := strconv.ParseInt(srv.storage.GetValue(metric.MType, metric.ID), 10, 64)
+		actualDelta, err := strconv.ParseInt(srv.storage.GetValue(r.Context(), metric.MType, metric.ID), 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -259,16 +261,16 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	case metrics.TypeGauge:
 		value := metric.Value
 
-		if !srv.storage.CheckMetric(metric.ID) {
+		if !srv.storage.CheckMetric(r.Context(), metric.ID) {
 			newMetric := metrics.NewGauge(metric.ID, float64(0))
-			err := srv.storage.Add(metric.ID, newMetric)
+			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err := srv.storage.Update(metric.MType, metric.ID, *value)
+		err := srv.storage.Update(r.Context(), metric.MType, metric.ID, *value)
 		if err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
@@ -299,7 +301,7 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
-	allMetrics, err := srv.storage.ListAll()
+	allMetrics, err := srv.storage.ListAll(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -315,7 +317,7 @@ func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv ServerHandler) Ping(w http.ResponseWriter, r *http.Request) {
-	if ok := srv.storage.Ping(); !ok {
+	if ok := srv.storage.Ping(r.Context()); !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(http.StatusOK)

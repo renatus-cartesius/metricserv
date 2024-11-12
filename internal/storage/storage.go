@@ -1,11 +1,13 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/renatus-cartesius/metricserv/internal/logger"
@@ -19,14 +21,15 @@ var (
 )
 
 type Storager interface {
-	Add(string, metrics.Metric) error
-	ListAll() (map[string]metrics.Metric, error)
-	CheckMetric(string) bool
-	Update(string, string, any) error
-	GetValue(string, string) string
-	Save() error
-	Load() error
-	Ping() bool
+	Add(context.Context, string, metrics.Metric) error
+	ListAll(context.Context) (map[string]metrics.Metric, error)
+	CheckMetric(context.Context, string) bool
+	Update(context.Context, string, string, any) error
+	GetValue(context.Context, string, string) string
+	Save(context.Context) error
+	Load(context.Context) error
+	Ping(context.Context) bool
+	Close(context.Context)
 }
 
 type MemStorage struct {
@@ -43,11 +46,11 @@ func NewMemStorage(savePath string) (Storager, error) {
 	}, nil
 }
 
-func (s *MemStorage) Update(mtype, name string, value any) error {
+func (s *MemStorage) Update(ctx context.Context, mtype, id string, value any) error {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 
-	metric := s.Metrics[name]
+	metric := s.Metrics[id]
 	if metric.GetType() != mtype {
 		return ErrWrongUpdateType
 	}
@@ -56,38 +59,38 @@ func (s *MemStorage) Update(mtype, name string, value any) error {
 	return nil
 }
 
-func (s *MemStorage) Add(name string, metric metrics.Metric) error {
+func (s *MemStorage) Add(ctx context.Context, id string, metric metrics.Metric) error {
 	s.mx.Lock()
 	defer s.mx.Unlock()
-	s.Metrics[name] = metric
+	s.Metrics[id] = metric
 	return nil
 }
 
-func (s *MemStorage) CheckMetric(name string) bool {
+func (s *MemStorage) CheckMetric(ctx context.Context, id string) bool {
 	// TODO: need to add check of metric type
 	s.mx.RLock()
 	defer s.mx.RUnlock()
-	_, ok := s.Metrics[name]
+	_, ok := s.Metrics[id]
 	return ok
 }
 
-func (s *MemStorage) ListAll() (map[string]metrics.Metric, error) {
+func (s *MemStorage) ListAll(ctx context.Context) (map[string]metrics.Metric, error) {
 	s.mx.RLock()
 	defer s.mx.RUnlock()
 	return s.Metrics, nil
 }
 
-func (s *MemStorage) GetValue(mtype, name string) string {
+func (s *MemStorage) GetValue(ctx context.Context, mtype, id string) string {
 	s.mx.RLock()
 	defer s.mx.RUnlock()
-	metric := s.Metrics[name]
+	metric := s.Metrics[id]
 	if metric.GetType() != mtype {
 		return ""
 	}
 	return metric.GetValue()
 }
 
-func (s *MemStorage) Load() error {
+func (s *MemStorage) Load(ctx context.Context) error {
 
 	fileInfo, err := os.Stat(s.savePath)
 	if err != nil {
@@ -125,7 +128,6 @@ func (s *MemStorage) Load() error {
 	// s.mx.Lock()
 	// defer s.mx.Unlock()
 
-	// var tmp map[string]models.AbstractMetric
 	var tmp interface{}
 
 	if err := json.NewDecoder(file).Decode(&tmp); err != nil {
@@ -138,17 +140,16 @@ func (s *MemStorage) Load() error {
 
 	for _, v := range tmp.(map[string]interface{})["metrics"].(map[string]interface{}) {
 		m := v.(map[string]interface{})
-		// m := v.(models.AbstractMetric)
 
 		switch m["type"].(string) {
 		case metrics.TypeCounter:
 			// fmt.Println(m)
-			counter := metrics.NewCounter(m["name"].(string), int64(m["value"].(float64)))
-			s.Add(m["name"].(string), counter)
+			counter := metrics.NewCounter(m["id"].(string), int64(m["value"].(float64)))
+			s.Add(ctx, m["id"].(string), counter)
 		case metrics.TypeGauge:
-			gauge := metrics.NewGauge(m["name"].(string), m["value"].(float64))
+			gauge := metrics.NewGauge(m["id"].(string), m["value"].(float64))
 			// fmt.Println(m)
-			s.Add(m["name"].(string), gauge)
+			s.Add(ctx, m["id"].(string), gauge)
 		}
 
 	}
@@ -161,7 +162,7 @@ func (s *MemStorage) Load() error {
 	return nil
 }
 
-func (s *MemStorage) Save() error {
+func (s *MemStorage) Save(ctx context.Context) error {
 
 	logger.Log.Info(
 		"saving storage to file",
@@ -187,8 +188,11 @@ func (s *MemStorage) Save() error {
 	return nil
 }
 
-func (s *MemStorage) Ping() bool {
+func (s *MemStorage) Ping(ctx context.Context) bool {
 	return true
+}
+
+func (s *MemStorage) Close(ctx context.Context) {
 }
 
 type PGStorage struct {
@@ -196,25 +200,20 @@ type PGStorage struct {
 	db *sql.DB
 }
 
-func NewPGStorage(dsn string) (Storager, error) {
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
+func NewPGStorage(db *sql.DB) (Storager, error) {
 	return &PGStorage{
 		db: db,
 	}, nil
 }
 
-func (pgs *PGStorage) Close() {
+func (pgs *PGStorage) Close(ctx context.Context) {
 	if err := pgs.db.Close(); err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func (pgs *PGStorage) Ping() bool {
-	if err := pgs.db.Ping(); err != nil {
+func (pgs *PGStorage) Ping(ctx context.Context) bool {
+	if err := pgs.db.PingContext(ctx); err != nil {
 		logger.Log.Error(
 			"error on ping postgresql database server",
 			zap.Error(err),
@@ -227,24 +226,70 @@ func (pgs *PGStorage) Ping() bool {
 	return true
 }
 
-func (pgs *PGStorage) Add(string, metrics.Metric) error {
+func (pgs *PGStorage) Add(ctx context.Context, id string, metric metrics.Metric) error {
+	_, err := pgs.db.Exec("INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3)", id, metric.GetType(), metric.GetValue())
+	if err != nil {
+		logger.Log.Error(
+			"error on inserting metric to db",
+		)
+		return err
+	}
 	return nil
 }
-func (pgs *PGStorage) ListAll() (map[string]metrics.Metric, error) {
+func (pgs *PGStorage) ListAll(ctx context.Context) (map[string]metrics.Metric, error) {
 	return nil, nil
 }
-func (pgs *PGStorage) CheckMetric(string) bool {
-	return true
+func (pgs *PGStorage) CheckMetric(ctx context.Context, id string) bool {
+	row := pgs.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM metrics WHERE id = $1", id)
+	var count int
+	row.Scan(&count)
+	if count != 0 {
+		return true
+	}
+	if err := row.Err(); err != nil {
+		logger.Log.Error(
+			"error on checking metric in db",
+			zap.Error(err),
+		)
+	}
+	return false
 }
-func (pgs *PGStorage) Update(string, string, any) error {
+func (pgs *PGStorage) Update(ctx context.Context, mtype, id string, value any) error {
+
+	// TODO: remove this workaround
+	if mtype == metrics.TypeCounter {
+		currentValue, err := strconv.ParseInt(pgs.GetValue(ctx, mtype, id), 10, 64)
+		if err != nil {
+			return err
+		}
+
+		value = value.(int64) + currentValue
+	}
+
+	_, err := pgs.db.ExecContext(ctx, "UPDATE metrics SET value = $1 where id = $2 AND type = $3", value, id, mtype)
+	if err != nil {
+		logger.Log.Error(
+			"error on inserting metric to db",
+		)
+		return err
+	}
 	return nil
 }
-func (pgs *PGStorage) GetValue(string, string) string {
-	return ""
+func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) string {
+	row := pgs.db.QueryRowContext(ctx, "SELECT value FROM metrics WHERE id = $1 and type = $2", id, mtype)
+	var value string
+	row.Scan(&value)
+	if err := row.Err(); err != nil {
+		logger.Log.Error(
+			"error on getting metric from db",
+			zap.Error(err),
+		)
+	}
+	return value
 }
-func (pgs *PGStorage) Save() error {
+func (pgs *PGStorage) Save(ctx context.Context) error {
 	return nil
 }
-func (pgs *PGStorage) Load() error {
+func (pgs *PGStorage) Load(ctx context.Context) error {
 	return nil
 }

@@ -3,14 +3,14 @@ package metrics
 import "fmt"
 
 type GaugeMetric struct {
-	Name  string  `json:"name"`
+	ID    string  `json:"id"`
 	Value float64 `json:"value"`
 	Type  string  `json:"type"`
 }
 
-func NewGauge(name string, value float64) *GaugeMetric {
+func NewGauge(id string, value float64) *GaugeMetric {
 	return &GaugeMetric{
-		Name:  name,
+		ID:    id,
 		Value: value,
 		Type:  TypeGauge,
 	}
@@ -20,7 +20,7 @@ func (m *GaugeMetric) Change(value interface{}) error {
 	return nil
 }
 func (m GaugeMetric) String() string {
-	return fmt.Sprintf("%s:%s:%f", TypeGauge, m.Name, m.Value)
+	return fmt.Sprintf("%s:%s:%f", TypeGauge, m.ID, m.Value)
 }
 
 func (m *GaugeMetric) GetValue() string {
