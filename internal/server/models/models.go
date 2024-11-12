@@ -7,6 +7,4 @@ type Metric struct {
 	Value *float64 `json:"value,omitempty"`
 }
 
-type MetricsBatch struct {
-	Metrics []*Metric `json:"metrics"`
-}
+type MetricsBatch []*Metric

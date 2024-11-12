@@ -148,7 +148,7 @@ func (a *Agent) Report() {
 			Value: &value,
 		}
 
-		metricsBatch.Metrics = append(metricsBatch.Metrics, metric)
+		metricsBatch = append(metricsBatch, metric)
 
 	}
 

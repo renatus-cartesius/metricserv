@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -232,7 +231,6 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		delta := metric.Delta
 
 		if !srv.storage.CheckMetric(r.Context(), metric.ID) {
-			fmt.Println("Creating new counter", metric.ID)
 			newMetric := metrics.NewCounter(metric.ID, int64(0))
 			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
@@ -330,7 +328,7 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, metric := range metricsBatch.Metrics {
+	for _, metric := range metricsBatch {
 
 		if !slices.Contains(metrics.AllowedTypes, metric.MType) {
 			w.WriteHeader(http.StatusBadRequest)
