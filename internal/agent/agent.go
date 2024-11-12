@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	updateURI = "/update"
+	updateURI  = "/update"
+	updatesURI = "/updates/"
 )
 
 type Agent struct {
@@ -133,6 +134,9 @@ func (a *Agent) Report() {
 			zap.Error(err),
 		)
 	}
+
+	var metricsBatch models.MetricsBatch
+
 	stats := a.monitor.Get()
 	for m, v := range stats {
 
@@ -144,53 +148,53 @@ func (a *Agent) Report() {
 			Value: &value,
 		}
 
-		var metricJSON bytes.Buffer
-
-		if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
-			logger.Log.Error(
-				"error on marshaling metric",
-				zap.String("metric", metricJSON.String()),
-				zap.String("metricID", metric.ID),
-				zap.Error(err),
-			)
-			return
-		}
-
-		metricsDebug := metricJSON.Bytes()
-
-		url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-		req, err := http.NewRequest(
-			http.MethodPost,
-			url,
-			&metricJSON,
-		)
-
-		if err != nil {
-			logger.Log.Error(
-				"error on preparing report request",
-				zap.String("metric", string(metricsDebug)),
-				zap.Error(err),
-			)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		res, err := a.httpClient.Do(req)
-		if err != nil {
-			logger.Log.Error(
-				"error on sending metric",
-				zap.String("metric", string(metricsDebug)),
-				zap.Error(err),
-			)
-			continue
-		}
-		defer res.Body.Close()
-
-		logger.Log.Debug(
-			"metric sended",
-			zap.String("metric", string(metricsDebug)),
-			zap.Int("status", res.StatusCode),
-		)
+		metricsBatch.Metrics = append(metricsBatch.Metrics, metric)
 
 	}
+
+	var metricsBatchJSON bytes.Buffer
+	if err := json.NewEncoder(&metricsBatchJSON).Encode(metricsBatch); err != nil {
+		logger.Log.Error(
+			"error on marshaling metrics batch",
+			zap.String("metric", metricsBatchJSON.String()),
+			zap.Error(err),
+		)
+		return
+	}
+
+	metricsBatchDebug := metricsBatchJSON.Bytes()
+
+	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
+	req, err := http.NewRequest(
+		http.MethodPost,
+		url,
+		&metricsBatchJSON,
+	)
+
+	if err != nil {
+		logger.Log.Error(
+			"error on preparing report request",
+			zap.String("metric", string(metricsBatchDebug)),
+			zap.Error(err),
+		)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := a.httpClient.Do(req)
+	if err != nil {
+		logger.Log.Error(
+			"error on sending metrics batch",
+			zap.String("metrics batch", string(metricsBatchDebug)),
+			zap.Error(err),
+		)
+		return
+	}
+	defer res.Body.Close()
+
+	logger.Log.Debug(
+		"metrics batch sended",
+		zap.String("metrics batch", string(metricsBatchDebug)),
+		zap.Int("status", res.StatusCode),
+	)
 }

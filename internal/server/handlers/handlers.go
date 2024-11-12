@@ -26,6 +26,7 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
 			r.Get("/{type}/{id}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
 		})
+		r.Post("/updates/", middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON)))
 		r.Route("/update", func(r chi.Router) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))
 			r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
@@ -314,6 +315,90 @@ func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(body))
+}
+
+func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
+
+	var metricsBatch models.MetricsBatch
+
+	if err := json.NewDecoder(r.Body).Decode(&metricsBatch); err != nil {
+		logger.Log.Error(
+			"error on unmarshaling request body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	for _, metric := range metricsBatch.Metrics {
+
+		if !slices.Contains(metrics.AllowedTypes, metric.MType) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch metric.MType {
+		case metrics.TypeCounter:
+			delta := metric.Delta
+
+			if !srv.storage.CheckMetric(r.Context(), metric.ID) {
+				newMetric := metrics.NewCounter(metric.ID, int64(0))
+				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			err := srv.storage.Update(r.Context(), metric.MType, metric.ID, *delta)
+			if err != nil {
+				if err == storage.ErrWrongUpdateType {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			actualDelta, err := strconv.ParseInt(srv.storage.GetValue(r.Context(), metric.MType, metric.ID), 10, 64)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			*metric.Delta = actualDelta
+
+		case metrics.TypeGauge:
+			value := metric.Value
+
+			if !srv.storage.CheckMetric(r.Context(), metric.ID) {
+				newMetric := metrics.NewGauge(metric.ID, float64(0))
+				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			err := srv.storage.Update(r.Context(), metric.MType, metric.ID, *value)
+			if err != nil {
+				if err == storage.ErrWrongUpdateType {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+		default:
+			w.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("{\"result\": \"ok\"}"))
 }
 
 func (srv ServerHandler) Ping(w http.ResponseWriter, r *http.Request) {
