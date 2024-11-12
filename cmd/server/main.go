@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
@@ -21,6 +23,8 @@ import (
 
 func main() {
 
+	ctx := context.Background()
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalln(err)
@@ -30,13 +34,49 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	memStorage, err := storage.NewMemStorage(cfg.SavePath)
-	if err != nil {
-		log.Fatalln("error on creating new storage")
+	var s storage.Storager
+
+	if cfg.DBDsn != "" {
+
+		db, err := sql.Open("pgx", cfg.DBDsn)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		_, err = db.Exec(
+			`CREATE TABLE IF NOT EXISTS metrics (
+				id TEXT NOT NULL,
+				type TEXT NOT NULL,
+				value double precision
+			);`,
+		)
+		if err != nil {
+			logger.Log.Error(
+				"error on applying startup migration",
+				zap.Error(err),
+			)
+		}
+
+		s, err = storage.NewPGStorage(db)
+		if err != nil {
+			log.Fatalln("error on creating postgresql storage")
+		}
+		logger.Log.Info(
+			"using postgresql as a storage backend",
+		)
+		defer s.Close(ctx)
+	} else {
+		s, err = storage.NewMemStorage(cfg.SavePath)
+		if err != nil {
+			log.Fatalln("error on creating memory storage")
+		}
+		logger.Log.Info(
+			"using memorystorage as a storage backend",
+		)
 	}
 
 	if cfg.RestoreStorage {
-		if err := memStorage.Load(); err != nil {
+		if err := s.Load(ctx); err != nil {
 			log.Fatalln(err)
 		}
 	}
@@ -55,7 +95,7 @@ func main() {
 				case <-saveSig:
 					return
 				case <-saveTicker.C:
-					if err := memStorage.Save(); err != nil {
+					if err := s.Save(ctx); err != nil {
 						logger.Log.Error(
 							"error on saving storage",
 							zap.Error(err),
@@ -67,7 +107,7 @@ func main() {
 		}()
 	}
 
-	srv := handlers.NewServerHandler(memStorage)
+	srv := handlers.NewServerHandler(s)
 
 	r := chi.NewRouter()
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
@@ -121,7 +161,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err = memStorage.Save(); err != nil {
+	if err = s.Save(ctx); err != nil {
 		log.Fatalln(err)
 	}
 }
