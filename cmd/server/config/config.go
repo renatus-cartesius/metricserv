@@ -13,6 +13,7 @@ type Config struct {
 	RestoreStorage bool
 	ServerLogLevel string
 	SavePath       string
+	DBDsn          string
 }
 
 func LoadConfig() (*Config, error) {
@@ -23,6 +24,7 @@ func LoadConfig() (*Config, error) {
 	flag.StringVar(&config.SrvAddress, "a", "localhost:8080", "address to metrics server")
 	flag.StringVar(&config.ServerLogLevel, "l", "INFO", "logging level")
 	flag.StringVar(&config.SavePath, "f", "./storage.json", "path to storage file save")
+	flag.StringVar(&config.DBDsn, "d", "", "connection string to database")
 	flag.IntVar(&config.SaveInterval, "i", 300, "interval to storage file save")
 	flag.BoolVar(&config.RestoreStorage, "r", true, "if true restoring server from file")
 
@@ -36,6 +38,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if envSavePath := os.Getenv("FILE_STORAGE_PATH"); envSavePath != "" {
 		config.SavePath = envSavePath
+	}
+	if envDBDsn := os.Getenv("DATABASE_DSN"); envDBDsn != "" {
+		config.DBDsn = envDBDsn
 	}
 	if envSaveInterval := os.Getenv("STORE_INTERVAL"); envSaveInterval != "" {
 		config.SaveInterval, err = strconv.Atoi(envSaveInterval)

@@ -3,21 +3,21 @@ package metrics
 import "fmt"
 
 type CounterMetric struct {
-	Name  string `json:"name"`
+	ID    string `json:"id"`
 	Value int64  `json:"value"`
 	Type  string `json:"type"`
 }
 
-func NewCounter(name string, value int64) *CounterMetric {
+func NewCounter(id string, value int64) *CounterMetric {
 	return &CounterMetric{
-		Name:  name,
+		ID:    id,
 		Value: value,
 		Type:  TypeCounter,
 	}
 }
 
 func (m CounterMetric) String() string {
-	return fmt.Sprintf("%s:%s:%d", TypeCounter, m.Name, m.Value)
+	return fmt.Sprintf("%s:%s:%d", TypeCounter, m.ID, m.Value)
 }
 
 func (m *CounterMetric) Change(value interface{}) error {
