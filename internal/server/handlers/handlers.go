@@ -228,29 +228,46 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 
 	switch metric.MType {
 	case metrics.TypeCounter:
-		delta := metric.Delta
+		delta := *metric.Delta
 
 		if !srv.storage.CheckMetric(r.Context(), metric.ID) {
 			newMetric := metrics.NewCounter(metric.ID, int64(0))
 			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
+				logger.Log.Error(
+					"error on adding new counter metric",
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err := srv.storage.Update(r.Context(), metric.MType, metric.ID, *delta)
+		err := srv.storage.Update(r.Context(), metric.MType, metric.ID, delta)
 		if err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			logger.Log.Error(
+				"error on updating metric",
+				zap.String("metric", metric.ID),
+				zap.String("metricType", metric.MType),
+				zap.Error(err),
+			)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		actualDelta, err := strconv.ParseInt(srv.storage.GetValue(r.Context(), metric.MType, metric.ID), 10, 64)
+
 		if err != nil {
+			logger.Log.Error(
+				"error on getting metric",
+				zap.String("metric", metric.ID),
+				zap.String("metricType", metric.MType),
+				zap.Error(err),
+			)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -343,6 +360,10 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 				newMetric := metrics.NewCounter(metric.ID, int64(0))
 				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 				if err != nil {
+					logger.Log.Error(
+						"error on adding new counter metric",
+						zap.Error(err),
+					)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
@@ -354,12 +375,24 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
+				logger.Log.Error(
+					"error on updating metric",
+					zap.String("metric", metric.ID),
+					zap.String("metricType", metric.MType),
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
 			actualDelta, err := strconv.ParseInt(srv.storage.GetValue(r.Context(), metric.MType, metric.ID), 10, 64)
 			if err != nil {
+				logger.Log.Error(
+					"error on getting metric",
+					zap.String("metric", metric.ID),
+					zap.String("metricType", metric.MType),
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -373,6 +406,10 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 				newMetric := metrics.NewGauge(metric.ID, float64(0))
 				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 				if err != nil {
+					logger.Log.Error(
+						"error on adding new gauge metric",
+						zap.Error(err),
+					)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}

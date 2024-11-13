@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -275,9 +276,11 @@ func (pgs *PGStorage) Update(ctx context.Context, mtype, id string, value any) e
 	}
 	return nil
 }
-func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) string {
+func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) (res string) {
 	row := pgs.db.QueryRowContext(ctx, "SELECT value FROM metrics WHERE id = $1 and type = $2", id, mtype)
-	var value string
+
+	var value float64
+
 	row.Scan(&value)
 	if err := row.Err(); err != nil {
 		logger.Log.Error(
@@ -285,7 +288,15 @@ func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) string {
 			zap.Error(err),
 		)
 	}
-	return value
+
+	switch mtype {
+	case metrics.TypeCounter:
+		res = fmt.Sprintf("%v", int64(value))
+	case metrics.TypeGauge:
+		res = fmt.Sprintf("%v", value)
+	}
+
+	return
 }
 func (pgs *PGStorage) Save(ctx context.Context) error {
 	return nil
