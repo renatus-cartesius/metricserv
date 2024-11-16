@@ -228,7 +228,7 @@ func (pgs *PGStorage) Ping(ctx context.Context) bool {
 }
 
 func (pgs *PGStorage) Add(ctx context.Context, id string, metric metrics.Metric) error {
-	_, err := pgs.db.Exec("INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3)", id, metric.GetType(), metric.GetValue())
+	_, err := pgs.db.ExecContext(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3)", id, metric.GetType(), metric.GetValue())
 	if err != nil {
 		logger.Log.Error(
 			"error on inserting metric to db",
