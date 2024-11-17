@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
@@ -27,17 +28,27 @@ type Agent struct {
 	reportInterval int
 	pollInterval   int
 	serverURL      string
-	httpClient     *http.Client
+	httpClient     *resty.Client
 	exitCh         chan os.Signal
 }
 
 func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor, exitCh chan os.Signal) *Agent {
+
+	httpClient := resty.New()
+	httpClient.
+		SetRetryCount(3).
+		AddRetryCondition(
+			func(r *resty.Response, err error) bool {
+				return r.StatusCode() == http.StatusTooManyRequests
+			},
+		)
+
 	return &Agent{
 		monitor:        monitor,
 		reportInterval: repoInterval,
 		pollInterval:   pollInterval,
 		serverURL:      serverURL,
-		httpClient:     &http.Client{},
+		httpClient:     httpClient,
 		exitCh:         exitCh,
 	}
 }
@@ -86,44 +97,29 @@ func (a *Agent) Poll() {
 			zap.String("metricID", metric.ID),
 			zap.Error(err),
 		)
-		return
+		// return
 	}
 
 	metricsDebug := metricJSON.Bytes()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-	req, err := http.NewRequest(
-		http.MethodPost,
-		url,
-		&metricJSON,
-	)
+	resp, err := a.httpClient.R().
+		SetBody(metric).
+		Post(url)
 
 	if err != nil {
 		logger.Log.Error(
-			"error on preparing report request",
+			"error on making report request",
 			zap.String("metric", metricJSON.String()),
 			zap.Error(err),
 		)
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := a.httpClient.Do(req)
-	if err != nil {
-		logger.Log.Error(
-			"error on sending metric",
-			zap.String("metric", metricJSON.String()),
-			zap.Error(err),
-		)
-		time.Sleep(time.Duration(a.pollInterval) * time.Second)
-		return
-	}
-	defer res.Body.Close()
 
 	logger.Log.Debug(
 		"metric sended",
 		zap.String("metric", string(metricsDebug)),
-		zap.Int("status", res.StatusCode),
+		zap.Int("status", resp.StatusCode()),
 	)
 }
 
@@ -165,36 +161,22 @@ func (a *Agent) Report() {
 	metricsBatchDebug := metricsBatchJSON.Bytes()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
-	req, err := http.NewRequest(
-		http.MethodPost,
-		url,
-		&metricsBatchJSON,
-	)
+	resp, err := a.httpClient.R().
+		SetBody(metricsBatch).
+		Post(url)
 
 	if err != nil {
 		logger.Log.Error(
-			"error on preparing report request",
-			zap.String("metric", string(metricsBatchDebug)),
-			zap.Error(err),
-		)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := a.httpClient.Do(req)
-	if err != nil {
-		logger.Log.Error(
-			"error on sending metrics batch",
+			"error on making metrics batch request",
 			zap.String("metrics batch", string(metricsBatchDebug)),
 			zap.Error(err),
 		)
 		return
 	}
-	defer res.Body.Close()
 
 	logger.Log.Debug(
 		"metrics batch sended",
 		zap.String("metrics batch", string(metricsBatchDebug)),
-		zap.Int("status", res.StatusCode),
+		zap.Int("status", resp.StatusCode()),
 	)
 }
