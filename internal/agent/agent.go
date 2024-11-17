@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -89,28 +90,28 @@ func (a *Agent) Poll() {
 	*metric.Delta = 1
 
 	var metricJSON bytes.Buffer
+	gzWriter := gzip.NewWriter(&metricJSON)
 
-	if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
+	if err := json.NewEncoder(gzWriter).Encode(metric); err != nil {
 		logger.Log.Error(
 			"error on marshaling metric",
-			zap.String("metric", metricJSON.String()),
 			zap.String("metricID", metric.ID),
 			zap.Error(err),
 		)
-		// return
+		return
 	}
-
-	metricsDebug := metricJSON.Bytes()
+	gzWriter.Flush()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
 	resp, err := a.httpClient.R().
-		SetBody(metric).
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(metricJSON.Bytes()).
 		Post(url)
 
 	if err != nil {
 		logger.Log.Error(
 			"error on making report request",
-			zap.String("metric", metricJSON.String()),
+			zap.String("metric", metric.ID),
 			zap.Error(err),
 		)
 		return
@@ -118,7 +119,7 @@ func (a *Agent) Poll() {
 
 	logger.Log.Debug(
 		"metric sended",
-		zap.String("metric", string(metricsDebug)),
+		zap.String("metric", metric.ID),
 		zap.Int("status", resp.StatusCode()),
 	)
 }
@@ -136,7 +137,13 @@ func (a *Agent) Report() {
 	stats := a.monitor.Get()
 	for m, v := range stats {
 
-		value, _ := strconv.ParseFloat(v, 64)
+		value, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			logger.Log.Error(
+				"error parsing float",
+				zap.Error(err),
+			)
+		}
 
 		metric := &models.Metric{
 			ID:    m,
@@ -149,26 +156,26 @@ func (a *Agent) Report() {
 	}
 
 	var metricsBatchJSON bytes.Buffer
-	if err := json.NewEncoder(&metricsBatchJSON).Encode(metricsBatch); err != nil {
+	gzWriter := gzip.NewWriter(&metricsBatchJSON)
+
+	if err := json.NewEncoder(gzWriter).Encode(metricsBatch); err != nil {
 		logger.Log.Error(
 			"error on marshaling metrics batch",
-			zap.String("metric", metricsBatchJSON.String()),
 			zap.Error(err),
 		)
 		return
 	}
-
-	metricsBatchDebug := metricsBatchJSON.Bytes()
+	gzWriter.Flush()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
 	resp, err := a.httpClient.R().
-		SetBody(metricsBatch).
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(metricsBatchJSON.Bytes()).
 		Post(url)
 
 	if err != nil {
 		logger.Log.Error(
 			"error on making metrics batch request",
-			zap.String("metrics batch", string(metricsBatchDebug)),
 			zap.Error(err),
 		)
 		return
@@ -176,7 +183,6 @@ func (a *Agent) Report() {
 
 	logger.Log.Debug(
 		"metrics batch sended",
-		zap.String("metrics batch", string(metricsBatchDebug)),
 		zap.Int("status", resp.StatusCode()),
 	)
 }
