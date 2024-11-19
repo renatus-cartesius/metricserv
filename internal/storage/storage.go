@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -19,18 +18,19 @@ import (
 
 var (
 	ErrWrongUpdateType = errors.New("wrong type when updating")
+	ErrEmptyMemStorage = errors.New("memstorage is not initialized")
 )
 
 type Storager interface {
 	Add(context.Context, string, metrics.Metric) error
 	ListAll(context.Context) (map[string]metrics.Metric, error)
-	CheckMetric(context.Context, string) bool
+	CheckMetric(context.Context, string) (bool, error)
 	Update(context.Context, string, string, any) error
 	GetValue(context.Context, string, string) string
 	Save(context.Context) error
 	Load(context.Context) error
-	Ping(context.Context) bool
-	Close(context.Context)
+	Ping(context.Context) error
+	Close() error
 }
 
 type MemStorage struct {
@@ -67,12 +67,12 @@ func (s *MemStorage) Add(ctx context.Context, id string, metric metrics.Metric) 
 	return nil
 }
 
-func (s *MemStorage) CheckMetric(ctx context.Context, id string) bool {
+func (s *MemStorage) CheckMetric(ctx context.Context, id string) (bool, error) {
 	// TODO: need to add check of metric type
 	s.mx.RLock()
 	defer s.mx.RUnlock()
 	_, ok := s.Metrics[id]
-	return ok
+	return ok, nil
 }
 
 func (s *MemStorage) ListAll(ctx context.Context) (map[string]metrics.Metric, error) {
@@ -189,11 +189,15 @@ func (s *MemStorage) Save(ctx context.Context) error {
 	return nil
 }
 
-func (s *MemStorage) Ping(ctx context.Context) bool {
-	return true
+func (s *MemStorage) Ping(ctx context.Context) error {
+	if s.Metrics == nil {
+		return ErrEmptyMemStorage
+	}
+	return nil
 }
 
-func (s *MemStorage) Close(ctx context.Context) {
+func (s *MemStorage) Close() error {
+	return nil
 }
 
 type PGStorage struct {
@@ -207,53 +211,34 @@ func NewPGStorage(db *sql.DB) (Storager, error) {
 	}, nil
 }
 
-func (pgs *PGStorage) Close(ctx context.Context) {
-	if err := pgs.db.Close(); err != nil {
-		log.Fatalln(err)
-	}
+func (pgs *PGStorage) Close() error {
+	return pgs.db.Close()
 }
 
-func (pgs *PGStorage) Ping(ctx context.Context) bool {
-	if err := pgs.db.PingContext(ctx); err != nil {
-		logger.Log.Error(
-			"error on ping postgresql database server",
-			zap.Error(err),
-		)
-		return false
-	}
-	logger.Log.Debug(
-		"connection to postgresql database server is alive",
-	)
-	return true
+func (pgs *PGStorage) Ping(ctx context.Context) error {
+	return pgs.db.PingContext(ctx)
 }
 
 func (pgs *PGStorage) Add(ctx context.Context, id string, metric metrics.Metric) error {
 	_, err := pgs.db.ExecContext(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3)", id, metric.GetType(), metric.GetValue())
-	if err != nil {
-		logger.Log.Error(
-			"error on inserting metric to db",
-		)
-		return err
-	}
-	return nil
+	return err
 }
+
 func (pgs *PGStorage) ListAll(ctx context.Context) (map[string]metrics.Metric, error) {
 	return nil, nil
 }
-func (pgs *PGStorage) CheckMetric(ctx context.Context, id string) bool {
+
+func (pgs *PGStorage) CheckMetric(ctx context.Context, id string) (bool, error) {
 	row := pgs.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM metrics WHERE id = $1", id)
 	var count int
 	row.Scan(&count)
+
 	if count != 0 {
-		return true
+		return true, nil
 	}
-	if err := row.Err(); err != nil {
-		logger.Log.Error(
-			"error on checking metric in db",
-			zap.Error(err),
-		)
-	}
-	return false
+
+	err := row.Err()
+	return false, err
 }
 func (pgs *PGStorage) Update(ctx context.Context, mtype, id string, value any) error {
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"errors"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
 
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
@@ -20,6 +22,9 @@ import (
 	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 func main() {
 
@@ -43,15 +48,17 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		_, err = db.Exec(
-			`CREATE TABLE IF NOT EXISTS metrics (
-				id TEXT NOT NULL,
-				type TEXT NOT NULL,
-				value double precision
-			);`,
-		)
-		if err != nil {
-			logger.Log.Error(
+		goose.SetBaseFS(embedMigrations)
+
+		if err := goose.SetDialect("postgres"); err != nil {
+			logger.Log.Fatal(
+				"error setting goose dialect",
+				zap.Error(err),
+			)
+		}
+
+		if err := goose.Up(db, "migrations"); err != nil {
+			logger.Log.Fatal(
 				"error on applying startup migration",
 				zap.Error(err),
 			)
@@ -64,7 +71,14 @@ func main() {
 		logger.Log.Info(
 			"using postgresql as a storage backend",
 		)
-		defer s.Close(ctx)
+		defer func() {
+			if err := db.Close(); err != nil {
+				logger.Log.Fatal(
+					"error on closing database",
+					zap.Error(err),
+				)
+			}
+		}()
 	} else {
 		s, err = storage.NewMemStorage(cfg.SavePath)
 		if err != nil {

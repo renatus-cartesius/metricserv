@@ -14,7 +14,7 @@ import (
 func SafeClose(closer io.Closer) {
 	err := closer.Close()
 	if err != nil {
-		logger.Log.Error(
+		logger.Log.Fatal(
 			"error on closing",
 			zap.String("closer", reflect.ValueOf(closer).String()),
 		)
