@@ -175,7 +175,14 @@ func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	value := srv.storage.GetValue(r.Context(), metricType, metricID)
+	value, err := srv.storage.GetValue(r.Context(), metricType, metricID)
+	if err != nil {
+		logger.Log.Error(
+			"error on getting value from storage",
+			zap.Error(err),
+		)
+	}
+
 	if value == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -216,7 +223,14 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	value := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
+	value, err := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
+	if err != nil {
+		logger.Log.Error(
+			"error on getting value from storage",
+			zap.Error(err),
+		)
+	}
+
 	if value == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -322,7 +336,15 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		actualDelta, err := strconv.ParseInt(srv.storage.GetValue(r.Context(), metric.MType, metric.ID), 10, 64)
+		stringDelta, err := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
+		if err != nil {
+			logger.Log.Error(
+				"error on getting value from storage",
+				zap.Error(err),
+			)
+		}
+
+		actualDelta, err := strconv.ParseInt(stringDelta, 10, 64)
 
 		if err != nil {
 			logger.Log.Error(
@@ -477,7 +499,15 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			actualDelta, err := strconv.ParseInt(srv.storage.GetValue(r.Context(), metric.MType, metric.ID), 10, 64)
+			stringDelta, err := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
+			if err != nil {
+				logger.Log.Error(
+					"error on getting value from storage",
+					zap.Error(err),
+				)
+			}
+
+			actualDelta, err := strconv.ParseInt(stringDelta, 10, 64)
 			if err != nil {
 				logger.Log.Error(
 					"error on getting metric",

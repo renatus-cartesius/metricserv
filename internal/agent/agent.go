@@ -140,9 +140,10 @@ func (a *Agent) Report() {
 		value, err := strconv.ParseFloat(v, 64)
 		if err != nil {
 			logger.Log.Error(
-				"error parsing float",
+				"error when parsing float value",
 				zap.Error(err),
 			)
+			continue
 		}
 
 		metric := &models.Metric{

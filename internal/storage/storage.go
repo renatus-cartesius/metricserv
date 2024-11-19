@@ -17,7 +17,8 @@ import (
 )
 
 var (
-	ErrWrongUpdateType = errors.New("wrong type when updating")
+	ErrWrongUpdateType = errors.New("wrong type when updating metric in storage")
+	ErrWrongGetType    = errors.New("wrong type when getting metric from storage")
 	ErrEmptyMemStorage = errors.New("memstorage is not initialized")
 )
 
@@ -26,7 +27,7 @@ type Storager interface {
 	ListAll(context.Context) (map[string]metrics.Metric, error)
 	CheckMetric(context.Context, string) (bool, error)
 	Update(context.Context, string, string, any) error
-	GetValue(context.Context, string, string) string
+	GetValue(context.Context, string, string) (string, error)
 	Save(context.Context) error
 	Load(context.Context) error
 	Ping(context.Context) error
@@ -81,14 +82,14 @@ func (s *MemStorage) ListAll(ctx context.Context) (map[string]metrics.Metric, er
 	return s.Metrics, nil
 }
 
-func (s *MemStorage) GetValue(ctx context.Context, mtype, id string) string {
+func (s *MemStorage) GetValue(ctx context.Context, mtype, id string) (string, error) {
 	s.mx.RLock()
 	defer s.mx.RUnlock()
 	metric := s.Metrics[id]
 	if metric.GetType() != mtype {
-		return ""
+		return "", nil
 	}
-	return metric.GetValue()
+	return metric.GetValue(), nil
 }
 
 func (s *MemStorage) Load(ctx context.Context) error {
@@ -244,7 +245,13 @@ func (pgs *PGStorage) Update(ctx context.Context, mtype, id string, value any) e
 
 	// TODO: remove this workaround
 	if mtype == metrics.TypeCounter {
-		currentValue, err := strconv.ParseInt(pgs.GetValue(ctx, mtype, id), 10, 64)
+
+		stringValue, err := pgs.GetValue(ctx, mtype, id)
+		if err != nil {
+			return err
+		}
+
+		currentValue, err := strconv.ParseInt(stringValue, 10, 64)
 		if err != nil {
 			return err
 		}
@@ -261,17 +268,14 @@ func (pgs *PGStorage) Update(ctx context.Context, mtype, id string, value any) e
 	}
 	return nil
 }
-func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) (res string) {
+func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) (res string, err error) {
 	row := pgs.db.QueryRowContext(ctx, "SELECT value FROM metrics WHERE id = $1 and type = $2", id, mtype)
 
 	var value float64
 
 	row.Scan(&value)
-	if err := row.Err(); err != nil {
-		logger.Log.Error(
-			"error on getting metric from db",
-			zap.Error(err),
-		)
+	if err = row.Err(); err != nil {
+		return
 	}
 
 	switch mtype {
@@ -279,6 +283,9 @@ func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) (res strin
 		res = fmt.Sprintf("%v", int64(value))
 	case metrics.TypeGauge:
 		res = fmt.Sprintf("%v", value)
+	default:
+		res = ""
+		err = ErrWrongGetType
 	}
 
 	return

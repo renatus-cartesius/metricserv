@@ -35,7 +35,10 @@ func TestMemStorageAdd(t *testing.T) {
 	storage.Add(context.Background(), counterID, counter)
 	storage.Add(context.Background(), gaugeID, gauge)
 
-	metrics, _ := storage.ListAll(context.Background())
+	metrics, err := storage.ListAll(context.Background())
+	if err != nil {
+		t.Fatalf("error on listings storage %s", err)
+	}
 
 	fmt.Println("DEBUG:", metrics)
 }

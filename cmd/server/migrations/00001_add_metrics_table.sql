@@ -9,5 +9,5 @@ CREATE TABLE IF NOT EXISTS metrics (
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
+DROP TABLE metrics;
 -- +goose StatementEnd
