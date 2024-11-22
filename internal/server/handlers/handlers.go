@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -140,7 +141,7 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 		err = srv.storage.Update(r.Context(), metricType, metricID, value)
 		if err != nil {
-			if err == storage.ErrWrongUpdateType {
+			if errors.Is(err, storage.ErrWrongUpdateType) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -181,6 +182,8 @@ func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
 			"error on getting value from storage",
 			zap.Error(err),
 		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	if value == "" {
@@ -229,6 +232,7 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 			"error on getting value from storage",
 			zap.Error(err),
 		)
+		return
 	}
 
 	if value == "" {
@@ -342,6 +346,8 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 				"error on getting value from storage",
 				zap.Error(err),
 			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		actualDelta, err := strconv.ParseInt(stringDelta, 10, 64)
@@ -505,6 +511,8 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 					"error on getting value from storage",
 					zap.Error(err),
 				)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 
 			actualDelta, err := strconv.ParseInt(stringDelta, 10, 64)

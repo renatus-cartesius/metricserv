@@ -268,27 +268,24 @@ func (pgs *PGStorage) Update(ctx context.Context, mtype, id string, value any) e
 	}
 	return nil
 }
-func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) (res string, err error) {
+func (pgs *PGStorage) GetValue(ctx context.Context, mtype, id string) (string, error) {
 	row := pgs.db.QueryRowContext(ctx, "SELECT value FROM metrics WHERE id = $1 and type = $2", id, mtype)
 
 	var value float64
 
 	row.Scan(&value)
-	if err = row.Err(); err != nil {
-		return
+	if err := row.Err(); err != nil {
+		return "", err
 	}
 
 	switch mtype {
 	case metrics.TypeCounter:
-		res = fmt.Sprintf("%v", int64(value))
+		return fmt.Sprintf("%v", int64(value)), nil
 	case metrics.TypeGauge:
-		res = fmt.Sprintf("%v", value)
+		return fmt.Sprintf("%v", value), nil
 	default:
-		res = ""
-		err = ErrWrongGetType
+		return "", ErrWrongGetType
 	}
-
-	return
 }
 func (pgs *PGStorage) Save(ctx context.Context) error {
 	return nil
