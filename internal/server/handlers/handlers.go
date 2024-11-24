@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -20,13 +21,15 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
+		r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
 		r.Route("/value", func(r chi.Router) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
-			r.Get("/{type}/{name}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
+			r.Get("/{type}/{id}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
 		})
+		r.Post("/updates/", middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON)))
 		r.Route("/update", func(r chi.Router) {
 			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))
-			r.Post("/{type}/{name}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
+			r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
 		})
 	})
 }
@@ -44,7 +47,7 @@ func NewServerHandler(storage storage.Storager) *ServerHandler {
 func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	metricType := chi.URLParam(r, "type")
-	metricName := chi.URLParam(r, "name")
+	metricID := chi.URLParam(r, "id")
 	metricValue := chi.URLParam(r, "value")
 
 	if !slices.Contains(metrics.AllowedTypes, metricType) {
@@ -65,19 +68,34 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !srv.storage.CheckMetric(metricName) {
+		ok, err := srv.storage.CheckMetric(r.Context(), metricID)
+		if err != nil {
+			logger.Log.Error(
+				"error on checking metric",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+
+		}
+
+		if !ok {
 			metric := &metrics.CounterMetric{
-				Name:  metricName,
+				ID:    metricID,
 				Value: int64(0),
 			}
-			err := srv.storage.Add(metricName, metric)
+			err := srv.storage.Add(r.Context(), metricID, metric)
 			if err != nil {
+				logger.Log.Error(
+					"error on adding new counter metric",
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err = srv.storage.Update(metricType, metricName, value)
+		err = srv.storage.Update(r.Context(), metricType, metricID, value)
 		if err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
@@ -95,21 +113,35 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !srv.storage.CheckMetric(metricName) {
+		ok, err := srv.storage.CheckMetric(r.Context(), metricID)
+		if err != nil {
+			logger.Log.Error(
+				"error on checking metric",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if !ok {
 			metric := &metrics.GaugeMetric{
-				Name:  metricName,
+				ID:    metricID,
 				Value: float64(0),
 			}
-			err := srv.storage.Add(metricName, metric)
+			err := srv.storage.Add(r.Context(), metricID, metric)
 			if err != nil {
+				logger.Log.Error(
+					"error on adding new gauge metric",
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err = srv.storage.Update(metricType, metricName, value)
+		err = srv.storage.Update(r.Context(), metricType, metricID, value)
 		if err != nil {
-			if err == storage.ErrWrongUpdateType {
+			if errors.Is(err, storage.ErrWrongUpdateType) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -127,14 +159,33 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (srv ServerHandler) GetValue(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
-	metricName := chi.URLParam(r, "name")
+	metricID := chi.URLParam(r, "id")
 
-	if !srv.storage.CheckMetric(metricName) {
+	ok, err := srv.storage.CheckMetric(r.Context(), metricID)
+	if err != nil {
+		logger.Log.Error(
+			"error on checking metric",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if !ok {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	value := srv.storage.GetValue(metricType, metricName)
+	value, err := srv.storage.GetValue(r.Context(), metricType, metricID)
+	if err != nil {
+		logger.Log.Error(
+			"error on getting value from storage",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	if value == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -159,12 +210,31 @@ func (srv ServerHandler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !srv.storage.CheckMetric(metric.ID) {
+	ok, err := srv.storage.CheckMetric(r.Context(), metric.ID)
+	if err != nil {
+		logger.Log.Error(
+			"error on checking metric",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+
+	}
+
+	if !ok {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	value := srv.storage.GetValue(metric.MType, metric.ID)
+	value, err := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
+	if err != nil {
+		logger.Log.Error(
+			"error on getting value from storage",
+			zap.Error(err),
+		)
+		return
+	}
+
 	if value == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -226,29 +296,69 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 
 	switch metric.MType {
 	case metrics.TypeCounter:
-		delta := metric.Delta
+		if metric.Delta == nil {
+			metric.Delta = new(int64)
+		}
+		delta := *metric.Delta
 
-		if !srv.storage.CheckMetric(metric.ID) {
+		ok, err := srv.storage.CheckMetric(r.Context(), metric.ID)
+		if err != nil {
+			logger.Log.Error(
+				"error on checking metric",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+
+		}
+
+		if !ok {
 			newMetric := metrics.NewCounter(metric.ID, int64(0))
-			err := srv.storage.Add(metric.ID, newMetric)
+			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
+				logger.Log.Error(
+					"error on adding new counter metric",
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err := srv.storage.Update(metric.MType, metric.ID, *delta)
-		if err != nil {
+		if err := srv.storage.Update(r.Context(), metric.MType, metric.ID, delta); err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			logger.Log.Error(
+				"error on updating metric",
+				zap.String("metric", metric.ID),
+				zap.String("metricType", metric.MType),
+				zap.Error(err),
+			)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		actualDelta, err := strconv.ParseInt(srv.storage.GetValue(metric.MType, metric.ID), 10, 64)
+		stringDelta, err := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
 		if err != nil {
+			logger.Log.Error(
+				"error on getting value from storage",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		actualDelta, err := strconv.ParseInt(stringDelta, 10, 64)
+
+		if err != nil {
+			logger.Log.Error(
+				"error on getting metric",
+				zap.String("metric", metric.ID),
+				zap.String("metricType", metric.MType),
+				zap.Error(err),
+			)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -256,19 +366,35 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		*metric.Delta = actualDelta
 
 	case metrics.TypeGauge:
-		value := metric.Value
+		if metric.Value == nil {
+			metric.Value = new(float64)
+		}
+		value := *metric.Value
 
-		if !srv.storage.CheckMetric(metric.ID) {
+		ok, err := srv.storage.CheckMetric(r.Context(), metric.ID)
+		if err != nil {
+			logger.Log.Error(
+				"error on checking metric",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if !ok {
 			newMetric := metrics.NewGauge(metric.ID, float64(0))
-			err := srv.storage.Add(metric.ID, newMetric)
+			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
+				logger.Log.Error(
+					"error on adding new gauge metric",
+					zap.Error(err),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
 
-		err := srv.storage.Update(metric.MType, metric.ID, *value)
-		if err != nil {
+		if err := srv.storage.Update(r.Context(), metric.MType, metric.ID, value); err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -298,7 +424,7 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
-	allMetrics, err := srv.storage.ListAll()
+	allMetrics, err := srv.storage.ListAll(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -311,4 +437,156 @@ func (srv ServerHandler) AllMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(body))
+}
+
+func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
+
+	var metricsBatch models.MetricsBatch
+
+	if err := json.NewDecoder(r.Body).Decode(&metricsBatch); err != nil {
+		logger.Log.Error(
+			"error on unmarshaling request body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	for _, metric := range metricsBatch {
+
+		if !slices.Contains(metrics.AllowedTypes, metric.MType) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch metric.MType {
+		case metrics.TypeCounter:
+			if metric.Delta == nil {
+				metric.Delta = new(int64)
+			}
+			delta := *metric.Delta
+
+			ok, err := srv.storage.CheckMetric(r.Context(), metric.ID)
+			if err != nil {
+				logger.Log.Error(
+					"error on checking metric",
+					zap.Error(err),
+				)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+
+			}
+
+			if !ok {
+				newMetric := metrics.NewCounter(metric.ID, int64(0))
+				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
+				if err != nil {
+					logger.Log.Error(
+						"error on adding new counter metric",
+						zap.Error(err),
+					)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			if err := srv.storage.Update(r.Context(), metric.MType, metric.ID, delta); err != nil {
+				if err == storage.ErrWrongUpdateType {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				logger.Log.Error(
+					"error on updating metric",
+					zap.String("metric", metric.ID),
+					zap.String("metricType", metric.MType),
+					zap.Error(err),
+				)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			stringDelta, err := srv.storage.GetValue(r.Context(), metric.MType, metric.ID)
+			if err != nil {
+				logger.Log.Error(
+					"error on getting value from storage",
+					zap.Error(err),
+				)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			actualDelta, err := strconv.ParseInt(stringDelta, 10, 64)
+			if err != nil {
+				logger.Log.Error(
+					"error on getting metric",
+					zap.String("metric", metric.ID),
+					zap.String("metricType", metric.MType),
+					zap.Error(err),
+				)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			*metric.Delta = actualDelta
+
+		case metrics.TypeGauge:
+			if metric.Value == nil {
+				metric.Value = new(float64)
+			}
+			value := *metric.Value
+
+			ok, err := srv.storage.CheckMetric(r.Context(), metric.ID)
+			if err != nil {
+				logger.Log.Error(
+					"error on checking metric",
+					zap.Error(err),
+				)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+
+			}
+
+			if !ok {
+				newMetric := metrics.NewGauge(metric.ID, float64(0))
+				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
+				if err != nil {
+					logger.Log.Error(
+						"error on adding new gauge metric",
+						zap.Error(err),
+					)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			if err := srv.storage.Update(r.Context(), metric.MType, metric.ID, value); err != nil {
+				if err == storage.ErrWrongUpdateType {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+		default:
+			w.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("{\"result\": \"ok\"}"))
+}
+
+func (srv ServerHandler) Ping(w http.ResponseWriter, r *http.Request) {
+	if err := srv.storage.Ping(r.Context()); err != nil {
+		logger.Log.Error(
+			"error on pinging db",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

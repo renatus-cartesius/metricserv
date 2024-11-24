@@ -6,11 +6,11 @@ import (
 )
 
 func TestNewGaugeMetric(t *testing.T) {
-	metricName := "cpu_usage"
+	metricID := "cpu_usage"
 	metricValue := float64(10)
 
 	metric := &GaugeMetric{
-		Name:  metricName,
+		ID:    metricID,
 		Value: metricValue,
 	}
 
@@ -22,11 +22,11 @@ func TestNewGaugeMetric(t *testing.T) {
 }
 
 func TestNewCounterMetric(t *testing.T) {
-	metricName := "poll_count"
+	metricID := "poll_count"
 	metricValue := int64(12345678)
 
 	metric := &CounterMetric{
-		Name:  metricName,
+		ID:    metricID,
 		Value: metricValue,
 	}
 

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
@@ -18,7 +20,8 @@ import (
 )
 
 const (
-	updateURI = "/update"
+	updateURI  = "/update"
+	updatesURI = "/updates/"
 )
 
 type Agent struct {
@@ -26,17 +29,27 @@ type Agent struct {
 	reportInterval int
 	pollInterval   int
 	serverURL      string
-	httpClient     *http.Client
+	httpClient     *resty.Client
 	exitCh         chan os.Signal
 }
 
 func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor, exitCh chan os.Signal) *Agent {
+
+	httpClient := resty.New()
+	httpClient.
+		SetRetryCount(3).
+		AddRetryCondition(
+			func(r *resty.Response, err error) bool {
+				return r.StatusCode() == http.StatusTooManyRequests
+			},
+		)
+
 	return &Agent{
 		monitor:        monitor,
 		reportInterval: repoInterval,
 		pollInterval:   pollInterval,
 		serverURL:      serverURL,
-		httpClient:     &http.Client{},
+		httpClient:     httpClient,
 		exitCh:         exitCh,
 	}
 }
@@ -77,52 +90,37 @@ func (a *Agent) Poll() {
 	*metric.Delta = 1
 
 	var metricJSON bytes.Buffer
+	gzWriter := gzip.NewWriter(&metricJSON)
 
-	if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
+	if err := json.NewEncoder(gzWriter).Encode(metric); err != nil {
 		logger.Log.Error(
 			"error on marshaling metric",
-			zap.String("metric", metricJSON.String()),
 			zap.String("metricID", metric.ID),
 			zap.Error(err),
 		)
 		return
 	}
-
-	metricsDebug := metricJSON.Bytes()
+	gzWriter.Flush()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-	req, err := http.NewRequest(
-		http.MethodPost,
-		url,
-		&metricJSON,
-	)
+	resp, err := a.httpClient.R().
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(metricJSON.Bytes()).
+		Post(url)
 
 	if err != nil {
 		logger.Log.Error(
-			"error on preparing report request",
-			zap.String("metric", metricJSON.String()),
+			"error on making report request",
+			zap.String("metric", metric.ID),
 			zap.Error(err),
 		)
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := a.httpClient.Do(req)
-	if err != nil {
-		logger.Log.Error(
-			"error on sending metric",
-			zap.String("metric", metricJSON.String()),
-			zap.Error(err),
-		)
-		time.Sleep(time.Duration(a.pollInterval) * time.Second)
-		return
-	}
-	defer res.Body.Close()
 
 	logger.Log.Debug(
 		"metric sended",
-		zap.String("metric", string(metricsDebug)),
-		zap.Int("status", res.StatusCode),
+		zap.String("metric", metric.ID),
+		zap.Int("status", resp.StatusCode()),
 	)
 }
 
@@ -133,6 +131,9 @@ func (a *Agent) Report() {
 			zap.Error(err),
 		)
 	}
+
+	var metricsBatch models.MetricsBatch
+
 	stats := a.monitor.Get()
 	for m, v := range stats {
 
@@ -151,53 +152,38 @@ func (a *Agent) Report() {
 			Value: &value,
 		}
 
-		var metricJSON bytes.Buffer
-
-		if err := json.NewEncoder(&metricJSON).Encode(metric); err != nil {
-			logger.Log.Error(
-				"error on marshaling metric",
-				zap.String("metric", metricJSON.String()),
-				zap.String("metricID", metric.ID),
-				zap.Error(err),
-			)
-			return
-		}
-
-		metricsDebug := metricJSON.Bytes()
-
-		url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-		req, err := http.NewRequest(
-			http.MethodPost,
-			url,
-			&metricJSON,
-		)
-
-		if err != nil {
-			logger.Log.Error(
-				"error on preparing report request",
-				zap.String("metric", string(metricsDebug)),
-				zap.Error(err),
-			)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		res, err := a.httpClient.Do(req)
-		if err != nil {
-			logger.Log.Error(
-				"error on sending metric",
-				zap.String("metric", string(metricsDebug)),
-				zap.Error(err),
-			)
-			continue
-		}
-		defer res.Body.Close()
-
-		logger.Log.Debug(
-			"metric sended",
-			zap.String("metric", string(metricsDebug)),
-			zap.Int("status", res.StatusCode),
-		)
+		metricsBatch = append(metricsBatch, metric)
 
 	}
+
+	var metricsBatchJSON bytes.Buffer
+	gzWriter := gzip.NewWriter(&metricsBatchJSON)
+
+	if err := json.NewEncoder(gzWriter).Encode(metricsBatch); err != nil {
+		logger.Log.Error(
+			"error on marshaling metrics batch",
+			zap.Error(err),
+		)
+		return
+	}
+	gzWriter.Flush()
+
+	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
+	resp, err := a.httpClient.R().
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(metricsBatchJSON.Bytes()).
+		Post(url)
+
+	if err != nil {
+		logger.Log.Error(
+			"error on making metrics batch request",
+			zap.Error(err),
+		)
+		return
+	}
+
+	logger.Log.Debug(
+		"metrics batch sended",
+		zap.Int("status", resp.StatusCode()),
+	)
 }

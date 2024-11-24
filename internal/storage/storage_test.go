@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -9,20 +10,20 @@ import (
 
 func TestMemStorageAdd(t *testing.T) {
 	// Counter metric test
-	counterName := "poll_count"
+	counterID := "poll_count"
 	counterValue := int64(12345678)
 
 	counter := &metrics.CounterMetric{
-		Name:  counterName,
+		ID:    counterID,
 		Value: counterValue,
 	}
 
 	// Gauge metric test
-	gaugeName := "cpu_usage"
+	gaugeID := "cpu_usage"
 	gaugeValue := float64(12345.678)
 
 	gauge := &metrics.GaugeMetric{
-		Name:  gaugeName,
+		ID:    gaugeID,
 		Value: gaugeValue,
 	}
 
@@ -31,10 +32,13 @@ func TestMemStorageAdd(t *testing.T) {
 		t.Fatalf("error on creating new storage\n")
 	}
 
-	storage.Add(counterName, counter)
-	storage.Add(gaugeName, gauge)
+	storage.Add(context.Background(), counterID, counter)
+	storage.Add(context.Background(), gaugeID, gauge)
 
-	metrics, _ := storage.ListAll()
+	metrics, err := storage.ListAll(context.Background())
+	if err != nil {
+		t.Fatalf("error on listings storage %s", err)
+	}
 
 	fmt.Println("DEBUG:", metrics)
 }

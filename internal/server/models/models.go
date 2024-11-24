@@ -7,8 +7,4 @@ type Metric struct {
 	Value *float64 `json:"value,omitempty"`
 }
 
-type AbstractMetric struct {
-	Name  string      `json:"name"`
-	Type  string      `json:"type"`
-	Value interface{} `json:"value"`
-}
+type MetricsBatch []*Metric
