@@ -17,18 +17,18 @@ import (
 	"github.com/renatus-cartesius/metricserv/internal/storage"
 )
 
-func Setup(r *chi.Mux, srv *ServerHandler) {
+func Setup(r *chi.Mux, srv *ServerHandler, hashKey string) {
 
 	r.Route("/", func(r chi.Router) {
-		r.Get("/", middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics)))
+		r.Get("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics))))
 		r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
 		r.Route("/value", func(r chi.Router) {
-			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON)))
+			r.Post("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON))))
 			r.Get("/{type}/{id}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
 		})
-		r.Post("/updates/", middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON)))
+		r.Post("/updates/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON))))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))
+			r.Post("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON))))
 			r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
 		})
 	})

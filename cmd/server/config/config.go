@@ -14,6 +14,7 @@ type Config struct {
 	ServerLogLevel string
 	SavePath       string
 	DBDsn          string
+	HashKey        string
 }
 
 func LoadConfig() (*Config, error) {
@@ -27,6 +28,7 @@ func LoadConfig() (*Config, error) {
 	flag.StringVar(&config.DBDsn, "d", "", "connection string to database")
 	flag.IntVar(&config.SaveInterval, "i", 300, "interval to storage file save")
 	flag.BoolVar(&config.RestoreStorage, "r", true, "if true restoring server from file")
+	flag.StringVar(&config.HashKey, "k", "", "key for hashing payload")
 
 	flag.Parse()
 
@@ -53,6 +55,9 @@ func LoadConfig() (*Config, error) {
 		if err != nil {
 			log.Fatal(err)
 		}
+	}
+	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
+		config.HashKey = envHashKey
 	}
 
 	return config, nil
