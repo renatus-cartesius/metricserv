@@ -26,7 +26,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	agent := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, exitCh)
+	agent := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, exitCh, config.HashKey)
 
 	agent.Serve()
 }

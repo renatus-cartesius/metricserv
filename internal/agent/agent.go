@@ -3,6 +3,9 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,9 +34,10 @@ type Agent struct {
 	serverURL      string
 	httpClient     *resty.Client
 	exitCh         chan os.Signal
+	hashKey        string
 }
 
-func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor, exitCh chan os.Signal) *Agent {
+func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor, exitCh chan os.Signal, hashKey string) *Agent {
 
 	httpClient := resty.New()
 	httpClient.
@@ -51,6 +55,7 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.
 		serverURL:      serverURL,
 		httpClient:     httpClient,
 		exitCh:         exitCh,
+		hashKey:        hashKey,
 	}
 }
 
@@ -103,10 +108,19 @@ func (a *Agent) Poll() {
 	gzWriter.Flush()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-	resp, err := a.httpClient.R().
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(metricJSON.Bytes()).
-		Post(url)
+	payload := metricJSON.Bytes()
+	req := a.httpClient.R()
+
+	if a.hashKey != "" {
+		hash := hmac.New(sha256.New, []byte(a.hashKey))
+		hash.Write(metricJSON.Bytes())
+
+		req.SetHeader("HashSHA256", base64.StdEncoding.EncodeToString(hash.Sum(nil)))
+	}
+
+	req.SetHeader("Content-Encoding", "gzip").SetBody(payload)
+
+	resp, err := req.Post(url)
 
 	if err != nil {
 		logger.Log.Error(
@@ -121,6 +135,7 @@ func (a *Agent) Poll() {
 		"metric sended",
 		zap.String("metric", metric.ID),
 		zap.Int("status", resp.StatusCode()),
+		zap.String("sum", req.Header.Get("HashSHA256")),
 	)
 }
 
@@ -169,10 +184,19 @@ func (a *Agent) Report() {
 	gzWriter.Flush()
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
-	resp, err := a.httpClient.R().
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(metricsBatchJSON.Bytes()).
-		Post(url)
+	payload := metricsBatchJSON.Bytes()
+	req := a.httpClient.R()
+
+	if a.hashKey != "" {
+		hash := hmac.New(sha256.New, []byte(a.hashKey))
+		hash.Write(metricsBatchJSON.Bytes())
+
+		req.SetHeader("HashSHA256", base64.StdEncoding.EncodeToString(hash.Sum(nil)))
+	}
+
+	req.SetHeader("Content-Encoding", "gzip").SetBody(payload)
+
+	resp, err := req.Post(url)
 
 	if err != nil {
 		logger.Log.Error(
@@ -185,5 +209,6 @@ func (a *Agent) Report() {
 	logger.Log.Debug(
 		"metrics batch sended",
 		zap.Int("status", resp.StatusCode()),
+		zap.String("sum", req.Header.Get("HashSHA256")),
 	)
 }
