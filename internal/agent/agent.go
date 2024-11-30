@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -20,6 +21,9 @@ import (
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
 	"github.com/renatus-cartesius/metricserv/internal/server/models"
+	"github.com/shirou/gopsutil/v4/mem"
+
+	"github.com/shirou/gopsutil/v4/cpu"
 )
 
 const (
@@ -35,9 +39,11 @@ type Agent struct {
 	httpClient     *resty.Client
 	exitCh         chan os.Signal
 	hashKey        string
+	reportCh       chan *monitor.RuntimeMetric
+	reportWg       *sync.WaitGroup
 }
 
-func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.Monitor, exitCh chan os.Signal, hashKey string) *Agent {
+func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, exitCh chan os.Signal, hashKey string) *Agent {
 
 	httpClient := resty.New()
 	httpClient.
@@ -49,19 +55,27 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, monitor monitor.
 		)
 
 	return &Agent{
-		monitor:        monitor,
+		monitor:        mon,
 		reportInterval: repoInterval,
 		pollInterval:   pollInterval,
 		serverURL:      serverURL,
 		httpClient:     httpClient,
 		exitCh:         exitCh,
 		hashKey:        hashKey,
+		reportCh:       make(chan *monitor.RuntimeMetric),
+		reportWg:       &sync.WaitGroup{},
 	}
 }
 
-func (a *Agent) Serve() {
+func (a *Agent) Serve(reportWorkers int) {
 
 	logger.Log.Info("starting agent")
+	defer a.reportWg.Wait()
+
+	for i := 0; i < reportWorkers; i++ {
+		a.reportWg.Add(1)
+		go a.StartReportWorker(i)
+	}
 
 	reportTicker := time.NewTicker(time.Duration(a.reportInterval) * time.Second)
 	defer reportTicker.Stop()
@@ -75,6 +89,7 @@ func (a *Agent) Serve() {
 			logger.Log.Info(
 				"shutting down agent",
 			)
+			close(a.reportCh)
 			return
 		case <-pollTicker.C:
 			a.Poll()
@@ -94,33 +109,7 @@ func (a *Agent) Poll() {
 
 	*metric.Delta = 1
 
-	var metricJSON bytes.Buffer
-	gzWriter := gzip.NewWriter(&metricJSON)
-
-	if err := json.NewEncoder(gzWriter).Encode(metric); err != nil {
-		logger.Log.Error(
-			"error on marshaling metric",
-			zap.String("metricID", metric.ID),
-			zap.Error(err),
-		)
-		return
-	}
-	gzWriter.Flush()
-
-	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-	payload := metricJSON.Bytes()
-	req := a.httpClient.R()
-
-	if a.hashKey != "" {
-		hash := hmac.New(sha256.New, []byte(a.hashKey))
-		hash.Write(metricJSON.Bytes())
-
-		req.SetHeader("HashSHA256", base64.StdEncoding.EncodeToString(hash.Sum(nil)))
-	}
-
-	req.SetHeader("Content-Encoding", "gzip").SetBody(payload)
-
-	resp, err := req.Post(url)
+	resp, err := a.Send(metric, updateURI)
 
 	if err != nil {
 		logger.Log.Error(
@@ -135,8 +124,48 @@ func (a *Agent) Poll() {
 		"metric sended",
 		zap.String("metric", metric.ID),
 		zap.Int("status", resp.StatusCode()),
-		zap.String("sum", req.Header.Get("HashSHA256")),
 	)
+}
+
+func (a *Agent) StartReportWorker(id int) {
+	for runtimeMetric := range a.reportCh {
+		value, err := strconv.ParseFloat(runtimeMetric.Value, 64)
+		if err != nil {
+			logger.Log.Error(
+				"error when parsing float value",
+				zap.Error(err),
+			)
+			continue
+		}
+
+		metric := &models.Metric{
+			ID:    runtimeMetric.Name,
+			MType: metrics.TypeGauge,
+			Value: &value,
+		}
+
+		resp, err := a.Send(metric, updateURI)
+
+		if err != nil {
+			logger.Log.Error(
+				"error on making metric request",
+				zap.Error(err),
+			)
+			continue
+		}
+
+		logger.Log.Debug(
+			"metric sended",
+			zap.Int("status", resp.StatusCode()),
+			zap.String("metric", metric.ID),
+			zap.Int("worker", id),
+		)
+	}
+	logger.Log.Debug(
+		"shutting down report worker",
+		zap.Int("worker", id),
+	)
+	a.reportWg.Done()
 }
 
 func (a *Agent) Report() {
@@ -147,68 +176,55 @@ func (a *Agent) Report() {
 		)
 	}
 
-	var metricsBatch models.MetricsBatch
-
 	stats := a.monitor.Get()
+
 	for m, v := range stats {
-
-		value, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			logger.Log.Error(
-				"error when parsing float value",
-				zap.Error(err),
-			)
-			continue
-		}
-
-		metric := &models.Metric{
-			ID:    m,
-			MType: metrics.TypeGauge,
-			Value: &value,
-		}
-
-		metricsBatch = append(metricsBatch, metric)
-
+		a.reportCh <- &monitor.RuntimeMetric{Name: m, Value: v}
 	}
 
-	var metricsBatchJSON bytes.Buffer
-	gzWriter := gzip.NewWriter(&metricsBatchJSON)
-
-	if err := json.NewEncoder(gzWriter).Encode(metricsBatch); err != nil {
+	v, err := mem.VirtualMemory()
+	if err != nil {
 		logger.Log.Error(
-			"error on marshaling metrics batch",
+			"error on calling gopsutil",
 			zap.Error(err),
 		)
-		return
+	}
+
+	a.reportCh <- &monitor.RuntimeMetric{Name: "TotalMemory", Value: fmt.Sprintf("%v", float64(v.Total))}
+	a.reportCh <- &monitor.RuntimeMetric{Name: "FreeMemory", Value: fmt.Sprintf("%v", float64(v.Free))}
+
+	c, err := cpu.Percent(0, false)
+	if err != nil {
+		logger.Log.Error(
+			"error on calling gopsutil",
+			zap.Error(err),
+		)
+	}
+	a.reportCh <- &monitor.RuntimeMetric{Name: "CPUutilization1", Value: fmt.Sprintf("%v", float64(c[0]))}
+
+}
+
+func (a *Agent) Send(obj interface{}, uri string) (*resty.Response, error) {
+	var buf bytes.Buffer
+	gzWriter := gzip.NewWriter(&buf)
+
+	if err := json.NewEncoder(gzWriter).Encode(obj); err != nil {
+		return nil, err
 	}
 	gzWriter.Flush()
 
-	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
-	payload := metricsBatchJSON.Bytes()
+	url := fmt.Sprintf("%s%s", a.serverURL, uri)
+	payload := buf.Bytes()
 	req := a.httpClient.R()
 
 	if a.hashKey != "" {
 		hash := hmac.New(sha256.New, []byte(a.hashKey))
-		hash.Write(metricsBatchJSON.Bytes())
+		hash.Write(buf.Bytes())
 
 		req.SetHeader("HashSHA256", base64.StdEncoding.EncodeToString(hash.Sum(nil)))
 	}
 
 	req.SetHeader("Content-Encoding", "gzip").SetBody(payload)
 
-	resp, err := req.Post(url)
-
-	if err != nil {
-		logger.Log.Error(
-			"error on making metrics batch request",
-			zap.Error(err),
-		)
-		return
-	}
-
-	logger.Log.Debug(
-		"metrics batch sended",
-		zap.Int("status", resp.StatusCode()),
-		zap.String("sum", req.Header.Get("HashSHA256")),
-	)
+	return req.Post(url)
 }

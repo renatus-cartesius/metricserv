@@ -28,5 +28,5 @@ func main() {
 
 	agent := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, exitCh, config.HashKey)
 
-	agent.Serve()
+	agent.Serve(config.RateLimit)
 }

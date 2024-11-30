@@ -13,6 +13,7 @@ type Config struct {
 	PollInterval   int
 	AgentLogLevel  string
 	HashKey        string
+	RateLimit      int
 }
 
 func LoadConfig() (*Config, error) {
@@ -24,6 +25,7 @@ func LoadConfig() (*Config, error) {
 	flag.IntVar(&config.PollInterval, "p", 2, "interval for polling to server")
 	flag.StringVar(&config.AgentLogLevel, "l", "INFO", "logging level")
 	flag.StringVar(&config.HashKey, "k", "", "key for hashing payload")
+	flag.IntVar(&config.RateLimit, "L", 2, "amount of a parallel workers")
 
 	flag.Parse()
 
@@ -49,6 +51,13 @@ func LoadConfig() (*Config, error) {
 	}
 	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
 		config.HashKey = envHashKey
+	}
+	if envRateLimit := os.Getenv("RATE_LIMIT"); envRateLimit != "" {
+		rateLimit, err := strconv.ParseInt(envRateLimit, 10, 32)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		config.RateLimit = int(rateLimit)
 	}
 
 	return config, nil
