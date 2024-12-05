@@ -26,7 +26,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	agent := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, exitCh, config.HashKey)
+	agent, err := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, exitCh, config.HashKey)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	agent.Serve(config.RateLimit)
 }
