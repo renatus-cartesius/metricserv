@@ -3,13 +3,13 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"runtime"
 	"strconv"
 	"time"
@@ -17,7 +17,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/google/uuid"
 	"github.com/renatus-cartesius/metricserv/internal/logger"
 	"github.com/renatus-cartesius/metricserv/internal/metrics"
 	"github.com/renatus-cartesius/metricserv/internal/monitor"
@@ -39,13 +38,12 @@ type Agent struct {
 	pollInterval   int
 	serverURL      string
 	httpClient     *resty.Client
-	exitCh         chan os.Signal
 	hashKey        string
 	reportCh       chan *monitor.RuntimeMetric
-	workersPool    *workerpool.Pool
+	workersPool    *workerpool.Pool[*monitor.RuntimeMetric]
 }
 
-func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, exitCh chan os.Signal, hashKey string) (*Agent, error) {
+func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, hashKey string) (*Agent, error) {
 
 	httpClient := resty.New()
 	httpClient.
@@ -56,7 +54,7 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Moni
 			},
 		)
 
-	pool, err := workerpool.NewPool()
+	pool, err := workerpool.NewPool[*monitor.RuntimeMetric]()
 	if err != nil {
 		return nil, err
 	}
@@ -67,14 +65,13 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Moni
 		pollInterval:   pollInterval,
 		serverURL:      serverURL,
 		httpClient:     httpClient,
-		exitCh:         exitCh,
 		hashKey:        hashKey,
 		reportCh:       make(chan *monitor.RuntimeMetric, runtime.NumCPU()),
 		workersPool:    pool,
 	}, nil
 }
 
-func (a *Agent) Serve(reportWorkers int) {
+func (a *Agent) Serve(ctx context.Context, reportWorkers int) {
 
 	logger.Log.Info("starting agent")
 
@@ -82,11 +79,12 @@ func (a *Agent) Serve(reportWorkers int) {
 		"creating workers",
 		zap.Int("count", reportWorkers),
 	)
-	a.workersPool.Listen(reportWorkers, func() {
-		a.StartReportWorker()
-	})
+	a.workersPool.Listen(ctx, reportWorkers, a.ReportHandler)
 
-	defer a.workersPool.Wait()
+	defer func() {
+		a.workersPool.Stop()
+		a.workersPool.Wait()
+	}()
 
 	reportTicker := time.NewTicker(time.Duration(a.reportInterval) * time.Second)
 	defer reportTicker.Stop()
@@ -96,11 +94,10 @@ func (a *Agent) Serve(reportWorkers int) {
 
 	for {
 		select {
-		case <-a.exitCh:
+		case <-ctx.Done():
 			logger.Log.Info(
 				"shutting down agent",
 			)
-			close(a.reportCh)
 			return
 		case <-pollTicker.C:
 			a.Poll()
@@ -120,7 +117,7 @@ func (a *Agent) Poll() {
 
 	*metric.Delta = 1
 
-	resp, err := a.Send(metric, updateURI)
+	resp, err := a.SendUpdate(metric)
 
 	if err != nil {
 		logger.Log.Error(
@@ -138,46 +135,38 @@ func (a *Agent) Poll() {
 	)
 }
 
-func (a *Agent) StartReportWorker() {
-	uuid := uuid.NewString()
-	for runtimeMetric := range a.reportCh {
-		value, err := strconv.ParseFloat(runtimeMetric.Value, 64)
-		if err != nil {
-			logger.Log.Error(
-				"error when parsing float value",
-				zap.String("worker", uuid),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		metric := &models.Metric{
-			ID:    runtimeMetric.Name,
-			MType: metrics.TypeGauge,
-			Value: &value,
-		}
-
-		resp, err := a.Send(metric, updateURI)
-
-		if err != nil {
-			logger.Log.Error(
-				"error on making metric request",
-				zap.String("worker", uuid),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		logger.Log.Debug(
-			"metric sended",
-			zap.Int("status", resp.StatusCode()),
-			zap.String("metric", metric.ID),
-			zap.String("worker", uuid),
+func (a *Agent) ReportHandler(runtimeMetric *monitor.RuntimeMetric) {
+	value, err := strconv.ParseFloat(runtimeMetric.Value, 64)
+	if err != nil {
+		logger.Log.Error(
+			"error when parsing float value",
+			zap.Error(err),
 		)
+		return
 	}
+
+	metric := &models.Metric{
+		ID:    runtimeMetric.Name,
+		MType: metrics.TypeGauge,
+		Value: &value,
+	}
+
+	resp, err := a.SendUpdate(metric)
+
+	if err != nil {
+		logger.Log.Error(
+			"error on making metric request",
+			// zap.String("worker", uuid),
+			zap.Error(err),
+		)
+		return
+	}
+
 	logger.Log.Debug(
-		"shutting down report worker",
-		zap.String("worker", uuid),
+		"metric sended",
+		zap.Int("status", resp.StatusCode()),
+		zap.String("metric", metric.ID),
+		// zap.String("worker", uuid),
 	)
 }
 
@@ -192,7 +181,7 @@ func (a *Agent) Report() {
 	stats := a.monitor.Get()
 
 	for m, v := range stats {
-		a.reportCh <- &monitor.RuntimeMetric{Name: m, Value: v}
+		a.workersPool.AddJob(&monitor.RuntimeMetric{Name: m, Value: v})
 	}
 
 	v, err := mem.VirtualMemory()
@@ -203,8 +192,8 @@ func (a *Agent) Report() {
 		)
 	}
 
-	a.reportCh <- &monitor.RuntimeMetric{Name: "TotalMemory", Value: fmt.Sprintf("%v", float64(v.Total))}
-	a.reportCh <- &monitor.RuntimeMetric{Name: "FreeMemory", Value: fmt.Sprintf("%v", float64(v.Free))}
+	a.workersPool.AddJob(&monitor.RuntimeMetric{Name: "TotalMemory", Value: fmt.Sprintf("%v", float64(v.Total))})
+	a.workersPool.AddJob(&monitor.RuntimeMetric{Name: "FreeMemory", Value: fmt.Sprintf("%v", float64(v.Free))})
 
 	c, err := cpu.Percent(0, false)
 	if err != nil {
@@ -213,15 +202,15 @@ func (a *Agent) Report() {
 			zap.Error(err),
 		)
 	}
-	a.reportCh <- &monitor.RuntimeMetric{Name: "CPUutilization1", Value: fmt.Sprintf("%v", float64(c[0]))}
+	a.workersPool.AddJob(&monitor.RuntimeMetric{Name: "CPUutilization1", Value: fmt.Sprintf("%v", float64(c[0]))})
 
 }
 
-func (a *Agent) Send(obj interface{}, uri string) (*resty.Response, error) {
+func (a *Agent) SendUpdate(metric *models.Metric) (*resty.Response, error) {
 	var buf bytes.Buffer
 	gzWriter := gzip.NewWriter(&buf)
 
-	if err := json.NewEncoder(gzWriter).Encode(obj); err != nil {
+	if err := json.NewEncoder(gzWriter).Encode(metric); err != nil {
 		return nil, err
 	}
 
@@ -229,7 +218,35 @@ func (a *Agent) Send(obj interface{}, uri string) (*resty.Response, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s%s", a.serverURL, uri)
+	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
+	payload := buf.Bytes()
+	req := a.httpClient.R()
+
+	if a.hashKey != "" {
+		hash := hmac.New(sha256.New, []byte(a.hashKey))
+		hash.Write(buf.Bytes())
+
+		req.SetHeader("HashSHA256", base64.StdEncoding.EncodeToString(hash.Sum(nil)))
+	}
+
+	req.SetHeader("Content-Encoding", "gzip").SetBody(payload)
+
+	return req.Post(url)
+}
+
+func (a *Agent) SendUpdates(metric *models.Metric) (*resty.Response, error) {
+	var buf bytes.Buffer
+	gzWriter := gzip.NewWriter(&buf)
+
+	if err := json.NewEncoder(gzWriter).Encode(metric); err != nil {
+		return nil, err
+	}
+
+	if err := gzWriter.Flush(); err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
 	payload := buf.Bytes()
 	req := a.httpClient.R()
 
