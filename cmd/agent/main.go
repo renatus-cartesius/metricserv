@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -14,8 +15,7 @@ import (
 
 func main() {
 
-	exitCh := make(chan os.Signal, 1)
-	signal.Notify(exitCh, os.Interrupt, syscall.SIGTERM)
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	config, err := config.LoadConfig()
 	if err != nil {
@@ -26,7 +26,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	agent := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, exitCh)
+	agent, err := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, config.HashKey)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	agent.Serve()
+	agent.Serve(ctx, config.RateLimit)
 }

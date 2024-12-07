@@ -126,7 +126,7 @@ func main() {
 	r := chi.NewRouter()
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
 
-	handlers.Setup(r, srv)
+	handlers.Setup(r, srv, cfg.HashKey)
 
 	serverCtx, serverStopCtx := context.WithCancel(context.Background())
 	defer serverStopCtx()
