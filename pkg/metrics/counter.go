@@ -16,7 +16,11 @@ func NewCounter(id string, value int64) *CounterMetric {
 	}
 }
 
-func (m CounterMetric) String() string {
+func (m CounterMetric) GetID() string {
+	return m.ID
+}
+
+func (m *CounterMetric) String() string {
 	return fmt.Sprintf("%s:%s:%d", TypeCounter, m.ID, m.Value)
 }
 

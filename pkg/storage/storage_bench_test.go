@@ -2,41 +2,53 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/renatus-cartesius/metricserv/pkg/metrics"
 	"math/rand"
 	"testing"
+	"time"
 )
 
 func BenchmarkMemStorage_Add(b *testing.B) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	storage, err := NewMemStorage("/dev/null")
 	if err != nil {
 		b.Fatal(err)
 	}
 
+	metricsCount := 1000
+
+	testMetrics := make([]metrics.Metric, 0)
+
+	for i := 0; i < metricsCount; i++ {
+		metricName := fmt.Sprintf("%v", r.Uint64())
+		if i%2 == 0 {
+			value := r.Float64()
+			testMetrics = append(testMetrics, metrics.NewGauge(metricName, value))
+		} else {
+			value := r.Int63()
+			testMetrics = append(testMetrics, metrics.NewCounter(metricName, value))
+		}
+	}
+
 	b.ResetTimer()
 
 	b.Run("gauge", func(b *testing.B) {
-		value := rand.Float64()
-		metricName := uuid.NewString()
-		metric := metrics.NewGauge(metricName, value)
-
-		//b.StartTimer()
 		for i := 0; i < b.N; i++ {
-			if err := storage.Add(context.Background(), metricName, metric); err != nil {
-				b.Fatal(err)
+			for _, m := range testMetrics {
+				if err := storage.Add(context.Background(), m.GetID(), m); err != nil {
+					b.Fatal(err)
+				}
 			}
 		}
 	})
 	b.Run("counter", func(b *testing.B) {
-		value := rand.Int63()
-		metricName := uuid.NewString()
-		metric := metrics.NewCounter(metricName, value)
-
-		//b.StartTimer()
 		for i := 0; i < b.N; i++ {
-			if err := storage.Add(context.Background(), metricName, metric); err != nil {
-				b.Fatal(err)
+			for _, m := range testMetrics {
+				if err := storage.Add(context.Background(), m.GetID(), m); err != nil {
+					b.Fatal(err)
+				}
 			}
 		}
 	})

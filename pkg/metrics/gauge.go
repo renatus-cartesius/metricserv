@@ -15,6 +15,11 @@ func NewGauge(id string, value float64) *GaugeMetric {
 		Type:  TypeGauge,
 	}
 }
+
+func (m *GaugeMetric) GetID() string {
+	return m.ID
+}
+
 func (m *GaugeMetric) Change(value interface{}) error {
 	m.Value = value.(float64)
 	return nil

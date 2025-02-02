@@ -17,4 +17,5 @@ type Metric interface {
 	Change(interface{}) error
 	GetValue() string
 	GetType() string
+	GetID() string
 }
