@@ -56,7 +56,7 @@ func BenchmarkMemStorage_CheckMetric(b *testing.B) {
 	for i := 0; i < storageSize; i++ {
 		var metric metrics.Metric
 		id := uuid.NewString()
-		switch rand.Intn(1) {
+		switch rand.Intn(2) {
 		case 0:
 			value := rand.Float64()
 			metric = metrics.NewGauge(id, value)
