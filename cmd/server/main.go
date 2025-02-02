@@ -19,9 +19,9 @@ import (
 
 	"github.com/renatus-cartesius/metricserv/cmd/helpers"
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
-	"github.com/renatus-cartesius/metricserv/internal/logger"
-	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
-	"github.com/renatus-cartesius/metricserv/internal/storage"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/server/handlers"
+	"github.com/renatus-cartesius/metricserv/pkg/storage"
 )
 
 //go:embed migrations/*.sql

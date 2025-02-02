@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/go-chi/chi/v5"
-	"github.com/renatus-cartesius/metricserv/internal/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
 	"go.uber.org/zap"
 	"log"
 	"net/http"

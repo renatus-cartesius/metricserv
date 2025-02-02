@@ -10,11 +10,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
-	"github.com/renatus-cartesius/metricserv/internal/logger"
-	"github.com/renatus-cartesius/metricserv/internal/metrics"
-	"github.com/renatus-cartesius/metricserv/internal/server/middlewares"
-	"github.com/renatus-cartesius/metricserv/internal/server/models"
-	"github.com/renatus-cartesius/metricserv/internal/storage"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/metrics"
+	"github.com/renatus-cartesius/metricserv/pkg/server/middlewares"
+	"github.com/renatus-cartesius/metricserv/pkg/server/models"
+	"github.com/renatus-cartesius/metricserv/pkg/storage"
 )
 
 func Setup(r *chi.Mux, srv *ServerHandler, hashKey string) {

@@ -9,9 +9,9 @@ import (
 	"syscall"
 
 	"github.com/renatus-cartesius/metricserv/cmd/agent/config"
-	"github.com/renatus-cartesius/metricserv/internal/agent"
-	"github.com/renatus-cartesius/metricserv/internal/logger"
-	"github.com/renatus-cartesius/metricserv/internal/monitor"
+	"github.com/renatus-cartesius/metricserv/pkg/agent"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/monitor"
 )
 
 func main() {

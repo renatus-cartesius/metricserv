@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/renatus-cartesius/metricserv/internal/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
 	"go.uber.org/zap"
 )
 

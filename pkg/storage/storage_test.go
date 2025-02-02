@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/renatus-cartesius/metricserv/internal/metrics"
+	"github.com/renatus-cartesius/metricserv/pkg/metrics"
 )
 
 func TestMemStorageAdd(t *testing.T) {

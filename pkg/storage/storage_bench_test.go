@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 	"github.com/google/uuid"
-	"github.com/renatus-cartesius/metricserv/internal/metrics"
+	"github.com/renatus-cartesius/metricserv/pkg/metrics"
 	"math/rand"
 	"testing"
 )

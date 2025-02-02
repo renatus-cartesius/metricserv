@@ -1,3 +1,4 @@
+// Package storage implements Storager interface for using it as a metrics.Metric storage backend.
 package storage
 
 import (
@@ -10,9 +11,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/renatus-cartesius/metricserv/internal/logger"
-	"github.com/renatus-cartesius/metricserv/internal/metrics"
-	"github.com/renatus-cartesius/metricserv/internal/utils"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/metrics"
+	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -22,18 +23,37 @@ var (
 	ErrEmptyMemStorage = errors.New("memstorage is not initialized")
 )
 
+// Storager represents data repository and working with some kind of underlying datastore (memory, file, dbms) and exposes CRUD operations. Data can be Load from underlying datastore on init phase.
 type Storager interface {
+	// Add Adds new metric to storage.
 	Add(context.Context, string, metrics.Metric) error
+
+	// ListAll Listing all metrics in storage.
 	ListAll(context.Context) (map[string]metrics.Metric, error)
+
+	// CheckMetric checking if metric is in storage by it`s id.
 	CheckMetric(context.Context, string) (bool, error)
+
+	// Update updates already added to storage metric.
 	Update(context.Context, string, string, any) error
+
+	// GetValue returning value of metric as strings.
 	GetValue(context.Context, string, string) (string, error)
+
+	// Save saving all metrics to underlying datastore
 	Save(context.Context) error
+
+	// Load loads all metrics from underlying datastore.
 	Load(context.Context) error
+
+	// Ping checks if underlying datastore is available.
 	Ping(context.Context) error
+
+	// Close free underlying datastore.
 	Close() error
 }
 
+// MemStorage implements Storager using memory and files and underlying datastore.
 type MemStorage struct {
 	Storager
 	mx       sync.RWMutex
@@ -92,6 +112,7 @@ func (s *MemStorage) GetValue(ctx context.Context, mtype, id string) (string, er
 	return metric.GetValue(), nil
 }
 
+// Loading metrics from file to MemStorage.Metrics
 func (s *MemStorage) Load(ctx context.Context) error {
 
 	fileInfo, err := os.Stat(s.savePath)

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/renatus-cartesius/metricserv/pkg/workerpool"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -17,11 +18,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/renatus-cartesius/metricserv/internal/logger"
-	"github.com/renatus-cartesius/metricserv/internal/metrics"
-	"github.com/renatus-cartesius/metricserv/internal/monitor"
-	"github.com/renatus-cartesius/metricserv/internal/server/models"
-	"github.com/renatus-cartesius/metricserv/pkg/workerpool"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/metrics"
+	"github.com/renatus-cartesius/metricserv/pkg/monitor"
+	"github.com/renatus-cartesius/metricserv/pkg/server/models"
 	"github.com/shirou/gopsutil/v4/mem"
 
 	"github.com/shirou/gopsutil/v4/cpu"

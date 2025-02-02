@@ -11,7 +11,7 @@ server-run:
 .PHONY: bench-server-mem-storage
 TS := $(shell date +"%d_%m_%y-%T")
 bench-server-mem-storage:
-	@cd internal/storage && go test -v -bench . -benchmem -$(type)profile=../../profiles/$(type)_$(TS).out
+	@cd pkg/storage && go test -v -bench . -benchmem -$(type)profile=../../profiles/$(type)_$(TS).out
 	@go tool pprof -http=":9090" profiles/$(type)_$(TS).out
 
 .PHONY: bench-server
