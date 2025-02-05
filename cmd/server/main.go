@@ -17,10 +17,11 @@ import (
 	"github.com/pressly/goose/v3"
 	"go.uber.org/zap"
 
+	"github.com/renatus-cartesius/metricserv/cmd/helpers"
 	"github.com/renatus-cartesius/metricserv/cmd/server/config"
-	"github.com/renatus-cartesius/metricserv/internal/logger"
-	"github.com/renatus-cartesius/metricserv/internal/server/handlers"
-	"github.com/renatus-cartesius/metricserv/internal/storage"
+	"github.com/renatus-cartesius/metricserv/pkg/logger"
+	"github.com/renatus-cartesius/metricserv/pkg/server/handlers"
+	"github.com/renatus-cartesius/metricserv/pkg/storage"
 )
 
 //go:embed migrations/*.sql
@@ -29,6 +30,10 @@ var embedMigrations embed.FS
 func main() {
 
 	ctx := context.Background()
+
+	pprofCtx, pprofStopCtx := context.WithCancel(context.Background())
+	defer pprofStopCtx()
+	go helpers.SetupPprofHandlers(pprofCtx, ":8081")
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -124,6 +129,7 @@ func main() {
 	srv := handlers.NewServerHandler(s)
 
 	r := chi.NewRouter()
+
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
 
 	handlers.Setup(r, srv, cfg.HashKey)
