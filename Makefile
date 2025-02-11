@@ -6,6 +6,10 @@ agent-run:
 server-run:
 	@go run cmd/server/main.go
 
+.PHONY: multichecker
+multichecker:
+	@go run cmd/multichecker/main.go $(ARGS)
+
 # -------------------- Benchmarking server --------------------
 
 .PHONY: bench-server-mem-storage
