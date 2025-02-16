@@ -27,7 +27,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err := logger.Initialize(config.AgentLogLevel); err != nil {
+	if err = logger.Initialize(config.AgentLogLevel); err != nil {
 		log.Fatalln(err)
 	}
 

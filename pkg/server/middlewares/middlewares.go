@@ -1,3 +1,4 @@
+// Package middlewares providing bunch of middleware that using in routing chain
 package middlewares
 
 import (

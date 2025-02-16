@@ -1,3 +1,4 @@
+// Package config contains all configurable parameters for run metrics agent
 package config
 
 import (

@@ -1,3 +1,4 @@
+// Package workerpool providing tools for running workers pool and assign tasks to it
 package workerpool
 
 import (

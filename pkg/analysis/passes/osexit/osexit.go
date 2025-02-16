@@ -1,3 +1,4 @@
+// Package osexit providing Analyzer for static analyzing of usage os.Exit in main function
 package osexit
 
 import (

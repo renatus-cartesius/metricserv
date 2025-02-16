@@ -8,7 +8,7 @@ server-run:
 
 .PHONY: multichecker
 multichecker:
-	@go run cmd/multichecker/main.go $(ARGS)
+	@go run cmd/multichecker/main.go ./...
 
 # -------------------- Benchmarking server --------------------
 

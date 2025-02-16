@@ -1,3 +1,4 @@
+// Package models consists of types that used in metric server handlers
 package models
 
 type Metric struct {
