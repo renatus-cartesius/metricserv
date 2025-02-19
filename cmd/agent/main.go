@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/renatus-cartesius/metricserv/cmd/helpers"
 	"log"
 	"os"
@@ -14,7 +15,17 @@ import (
 	"github.com/renatus-cartesius/metricserv/pkg/monitor"
 )
 
+var (
+	buildDate    string
+	buildCommit  string
+	buildVersion string
+)
+
 func main() {
+
+	fmt.Println("Build version:", tagHelper(buildVersion))
+	fmt.Println("Build date:", tagHelper(buildDate))
+	fmt.Println("Build commit:", tagHelper(buildCommit))
 
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
@@ -37,4 +48,12 @@ func main() {
 	}
 
 	agent.Serve(ctx, config.RateLimit)
+}
+
+func tagHelper(tag string) string {
+	if tag == "" {
+		return "N/A"
+	} else {
+		return tag
+	}
 }

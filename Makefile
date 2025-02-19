@@ -1,10 +1,14 @@
+
 .PHONY: agent-run
+buildVersion := $(git describe --tags --abbrev=0)
+buildCommit := $(git rev-parse HEAD)
+buildDate := $(date +'%Y/%m/%d-%H:%M:%S')
 agent-run:
-	@go run cmd/agent/main.go
+	@go run -ldflags "-X main.buildVersion=$(buildVersion) -X main.buildCommit=$(buildCommit) -X main.buildDate=$(buildDate)" cmd/agent/main.go
 
 .PHONY: server-run
 server-run:
-	@go run cmd/server/main.go
+	@go run -ldflags "-X main.buildVersion=$(buildVersion) -X main.buildCommit=$(buildCommit) -X main.buildDate=$(buildDate)" cmd/server/main.go
 
 .PHONY: multichecker
 multichecker:
