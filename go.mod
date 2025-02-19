@@ -1,6 +1,6 @@
 module github.com/renatus-cartesius/metricserv
 
-go 1.23.6
+go 1.22.1
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0
@@ -14,7 +14,7 @@ require (
 	github.com/pressly/goose/v3 v3.22.1
 	github.com/shirou/gopsutil/v4 v4.24.10
 	golang.org/x/tools v0.30.0
-	honnef.co/go/tools v0.6.0
+	honnef.co/go/tools v0.5.0
 )
 
 require (
