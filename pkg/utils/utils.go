@@ -41,3 +41,11 @@ func ParseExpNotation(value string) (int64, error) {
 	}
 	return res, nil
 }
+
+func TagHelper(tag string) string {
+	if tag == "" {
+		return "N/A"
+	} else {
+		return tag
+	}
+}

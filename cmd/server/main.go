@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
 	"net/http"
 	"os"
@@ -36,9 +37,9 @@ var (
 
 func main() {
 
-	fmt.Println("Build version:", tagHelper(buildVersion))
-	fmt.Println("Build date:", tagHelper(buildDate))
-	fmt.Println("Build commit:", tagHelper(buildCommit))
+	fmt.Println("Build version:", utils.TagHelper(buildVersion))
+	fmt.Println("Build date:", utils.TagHelper(buildDate))
+	fmt.Println("Build commit:", utils.TagHelper(buildCommit))
 
 	ctx := context.Background()
 
@@ -194,13 +195,5 @@ func main() {
 
 	if err = s.Save(ctx); err != nil {
 		log.Fatalln(err)
-	}
-}
-
-func tagHelper(tag string) string {
-	if tag == "" {
-		return "N/A"
-	} else {
-		return tag
 	}
 }
