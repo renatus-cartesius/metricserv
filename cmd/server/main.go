@@ -37,10 +37,6 @@ var (
 
 func main() {
 
-	fmt.Println("Build version:", utils.TagHelper(buildVersion))
-	fmt.Println("Build date:", utils.TagHelper(buildDate))
-	fmt.Println("Build commit:", utils.TagHelper(buildCommit))
-
 	ctx := context.Background()
 
 	pprofCtx, pprofStopCtx := context.WithCancel(context.Background())
@@ -55,6 +51,10 @@ func main() {
 	if err = logger.Initialize(cfg.ServerLogLevel); err != nil {
 		log.Fatalln(err)
 	}
+
+	logger.Log.Info(fmt.Sprintf("Build version: %v", utils.TagHelper(buildVersion)))
+	logger.Log.Info(fmt.Sprintf("Build date: %v", utils.TagHelper(buildDate)))
+	logger.Log.Info(fmt.Sprintf("Build commit: %v", utils.TagHelper(buildCommit)))
 
 	var s storage.Storager
 
