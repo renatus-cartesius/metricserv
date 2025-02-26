@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"embed"
 	"errors"
+	"fmt"
+	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
 	"net/http"
 	"os"
@@ -27,6 +29,12 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
+var (
+	buildDate    string
+	buildCommit  string
+	buildVersion string
+)
+
 func main() {
 
 	ctx := context.Background()
@@ -40,9 +48,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err := logger.Initialize(cfg.ServerLogLevel); err != nil {
+	if err = logger.Initialize(cfg.ServerLogLevel); err != nil {
 		log.Fatalln(err)
 	}
+
+	logger.Log.Info(fmt.Sprintf("Build version: %v", utils.TagHelper(buildVersion)))
+	logger.Log.Info(fmt.Sprintf("Build date: %v", utils.TagHelper(buildDate)))
+	logger.Log.Info(fmt.Sprintf("Build commit: %v", utils.TagHelper(buildCommit)))
 
 	var s storage.Storager
 
@@ -55,14 +67,14 @@ func main() {
 
 		goose.SetBaseFS(embedMigrations)
 
-		if err := goose.SetDialect("postgres"); err != nil {
+		if err = goose.SetDialect("postgres"); err != nil {
 			logger.Log.Fatal(
 				"error setting goose dialect",
 				zap.Error(err),
 			)
 		}
 
-		if err := goose.Up(db, "migrations"); err != nil {
+		if err = goose.Up(db, "migrations"); err != nil {
 			logger.Log.Fatal(
 				"error on applying startup migration",
 				zap.Error(err),
@@ -95,7 +107,7 @@ func main() {
 	}
 
 	if cfg.RestoreStorage {
-		if err := s.Load(ctx); err != nil {
+		if err = s.Load(ctx); err != nil {
 			log.Fatalln(err)
 		}
 	}
@@ -114,7 +126,7 @@ func main() {
 				case <-saveSig:
 					return
 				case <-saveTicker.C:
-					if err := s.Save(ctx); err != nil {
+					if err = s.Save(ctx); err != nil {
 						logger.Log.Error(
 							"error on saving storage",
 							zap.Error(err),
@@ -161,7 +173,7 @@ func main() {
 			}
 		}()
 
-		err := server.Shutdown(shutdownCtx)
+		err = server.Shutdown(shutdownCtx)
 		if err != nil {
 			logger.Log.Fatal(
 				"error on graceful shutdown",

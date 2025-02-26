@@ -1,3 +1,4 @@
+// Package logger exposing singleton object of a *zap.Logger
 package logger
 
 import (

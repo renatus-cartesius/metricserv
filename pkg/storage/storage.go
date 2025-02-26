@@ -112,7 +112,7 @@ func (s *MemStorage) GetValue(ctx context.Context, mtype, id string) (string, er
 	return metric.GetValue(), nil
 }
 
-// Loading metrics from file to MemStorage.Metrics
+// Load loading metrics from file to MemStorage.Metrics
 func (s *MemStorage) Load(ctx context.Context) error {
 
 	fileInfo, err := os.Stat(s.savePath)

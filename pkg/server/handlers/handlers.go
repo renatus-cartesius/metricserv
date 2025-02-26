@@ -1,3 +1,4 @@
+// Package handlers consists of ServerHandler type, that encapsulating multiple handlers for metrics server
 package handlers
 
 import (
@@ -84,7 +85,7 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 				ID:    metricID,
 				Value: int64(0),
 			}
-			err := srv.storage.Add(r.Context(), metricID, metric)
+			err = srv.storage.Add(r.Context(), metricID, metric)
 			if err != nil {
 				logger.Log.Error(
 					"error on adding new counter metric",
@@ -128,7 +129,7 @@ func (srv ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
 				ID:    metricID,
 				Value: float64(0),
 			}
-			err := srv.storage.Add(r.Context(), metricID, metric)
+			err = srv.storage.Add(r.Context(), metricID, metric)
 			if err != nil {
 				logger.Log.Error(
 					"error on adding new gauge metric",
@@ -314,7 +315,7 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 
 		if !ok {
 			newMetric := metrics.NewCounter(metric.ID, int64(0))
-			err := srv.storage.Add(r.Context(), metric.ID, newMetric)
+			err = srv.storage.Add(r.Context(), metric.ID, newMetric)
 			if err != nil {
 				logger.Log.Error(
 					"error on adding new counter metric",
@@ -325,7 +326,7 @@ func (srv ServerHandler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if err := srv.storage.Update(r.Context(), metric.MType, metric.ID, delta); err != nil {
+		if err = srv.storage.Update(r.Context(), metric.MType, metric.ID, delta); err != nil {
 			if err == storage.ErrWrongUpdateType {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -479,7 +480,7 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 
 			if !ok {
 				newMetric := metrics.NewCounter(metric.ID, int64(0))
-				err := srv.storage.Add(r.Context(), metric.ID, newMetric)
+				err = srv.storage.Add(r.Context(), metric.ID, newMetric)
 				if err != nil {
 					logger.Log.Error(
 						"error on adding new counter metric",
@@ -490,7 +491,7 @@ func (srv ServerHandler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if err := srv.storage.Update(r.Context(), metric.MType, metric.ID, delta); err != nil {
+			if err = srv.storage.Update(r.Context(), metric.MType, metric.ID, delta); err != nil {
 				if err == storage.ErrWrongUpdateType {
 					w.WriteHeader(http.StatusBadRequest)
 					return

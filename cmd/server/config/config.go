@@ -1,3 +1,4 @@
+// Package config contains all configurable parameters for run metrics server
 package config
 
 import (

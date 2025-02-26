@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/renatus-cartesius/metricserv/cmd/helpers"
+	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +14,12 @@ import (
 	"github.com/renatus-cartesius/metricserv/pkg/agent"
 	"github.com/renatus-cartesius/metricserv/pkg/logger"
 	"github.com/renatus-cartesius/metricserv/pkg/monitor"
+)
+
+var (
+	buildDate    string
+	buildCommit  string
+	buildVersion string
 )
 
 func main() {
@@ -27,9 +35,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err := logger.Initialize(config.AgentLogLevel); err != nil {
+	if err = logger.Initialize(config.AgentLogLevel); err != nil {
 		log.Fatalln(err)
 	}
+
+	logger.Log.Info(fmt.Sprintf("Build version: %v", utils.TagHelper(buildVersion)))
+	logger.Log.Info(fmt.Sprintf("Build date: %v", utils.TagHelper(buildDate)))
+	logger.Log.Info(fmt.Sprintf("Build commit: %v", utils.TagHelper(buildCommit)))
 
 	agent, err := agent.NewAgent(config.ReportInterval, config.PollInterval, "http://"+config.SrvAddress, &monitor.MemMonitor{}, config.HashKey)
 	if err != nil {

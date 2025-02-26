@@ -9,7 +9,7 @@ on:
 jobs:
   statictest:
     runs-on: ubuntu-latest
-    container: golang:1.22
+    container: golang:1.22.1
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -30,4 +30,5 @@ jobs:
 
       - name: Run statictest
         run: |
+          go version && \
           go vet -vettool=$(which statictest) ./...

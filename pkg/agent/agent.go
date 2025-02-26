@@ -1,3 +1,4 @@
+// Package agent providing types and methods for running metrics agent
 package agent
 
 import (

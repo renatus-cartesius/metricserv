@@ -1,3 +1,4 @@
+// Package metrics providing common Metric interface and some its implementations (GaugeMetric, CounterMetric)
 package metrics
 
 const (

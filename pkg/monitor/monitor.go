@@ -1,3 +1,4 @@
+// Package monitor providing Monitor interface for getting some informational data from OS
 package monitor
 
 type Monitor interface {
