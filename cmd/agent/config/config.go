@@ -15,6 +15,7 @@ type Config struct {
 	AgentLogLevel  string
 	HashKey        string
 	RateLimit      int
+	PublicKey      string
 }
 
 func LoadConfig() (*Config, error) {
@@ -27,6 +28,7 @@ func LoadConfig() (*Config, error) {
 	flag.StringVar(&config.AgentLogLevel, "l", "INFO", "logging level")
 	flag.StringVar(&config.HashKey, "k", "", "key for hashing payload")
 	flag.IntVar(&config.RateLimit, "L", 2, "amount of a parallel workers")
+	flag.StringVar(&config.PublicKey, "crypto-key", "./public.pem", "public key")
 
 	flag.Parse()
 
@@ -59,6 +61,10 @@ func LoadConfig() (*Config, error) {
 			log.Fatalln(err)
 		}
 		config.RateLimit = int(rateLimit)
+
+	}
+	if envPublicKey := os.Getenv("CRYPTO_KEY"); envPublicKey != "" {
+		config.PublicKey = envPublicKey
 	}
 
 	return config, nil

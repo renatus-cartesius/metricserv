@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
 	"net/http"
@@ -138,7 +139,19 @@ func main() {
 		}()
 	}
 
-	srv := handlers.NewServerHandler(s)
+	rsaProcessor, err := encryption.NewRSAProcessor()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	privateKey, err := encryption.NewRSAPrivateKey(cfg.PrivateKey)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	rsaProcessor.SetPrivateKey(privateKey)
+
+	srv := handlers.NewServerHandler(s, rsaProcessor)
 
 	r := chi.NewRouter()
 

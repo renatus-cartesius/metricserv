@@ -4,6 +4,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"net/http"
 	"slices"
 	"strconv"
@@ -27,21 +28,23 @@ func Setup(r *chi.Mux, srv *ServerHandler, hashKey string) {
 			r.Post("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.GetValueJSON))))
 			r.Get("/{type}/{id}", middlewares.Gzipper(logger.RequestLogger(srv.GetValue)))
 		})
-		r.Post("/updates/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON))))
+		r.Post("/updates/", middlewares.Decryptor(srv.encProcessor, middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON)))))
 		r.Route("/update", func(r chi.Router) {
-			r.Post("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON))))
+			r.Post("/", middlewares.Decryptor(srv.encProcessor, middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON)))))
 			r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
 		})
 	})
 }
 
 type ServerHandler struct {
-	storage storage.Storager
+	storage      storage.Storager
+	encProcessor encryption.Processor
 }
 
-func NewServerHandler(storage storage.Storager) *ServerHandler {
+func NewServerHandler(storage storage.Storager, encP encryption.Processor) *ServerHandler {
 	return &ServerHandler{
-		storage: storage,
+		storage:      storage,
+		encProcessor: encP,
 	}
 }
 
