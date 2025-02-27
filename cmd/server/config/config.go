@@ -16,6 +16,7 @@ type Config struct {
 	SavePath       string
 	DBDsn          string
 	HashKey        string
+	PrivateKey     string
 }
 
 func LoadConfig() (*Config, error) {
@@ -30,6 +31,7 @@ func LoadConfig() (*Config, error) {
 	flag.IntVar(&config.SaveInterval, "i", 300, "interval to storage file save")
 	flag.BoolVar(&config.RestoreStorage, "r", true, "if true restoring server from file")
 	flag.StringVar(&config.HashKey, "k", "", "key for hashing payload")
+	flag.StringVar(&config.PrivateKey, "crypto-key", "./private.pem", "private key")
 
 	flag.Parse()
 
@@ -59,6 +61,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
 		config.HashKey = envHashKey
+	}
+	if envPrivateKey := os.Getenv("CRYPTO_KEY"); envPrivateKey != "" {
+		config.PrivateKey = envPrivateKey
 	}
 
 	return config, nil

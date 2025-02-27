@@ -24,4 +24,6 @@ vendor/
 .idea
 .vscode
 
+*.pem
+
 storage.json
