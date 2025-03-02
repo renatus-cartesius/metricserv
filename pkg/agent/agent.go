@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"github.com/renatus-cartesius/metricserv/pkg/workerpool"
 	"net/http"
 	"runtime"
@@ -42,9 +43,10 @@ type Agent struct {
 	hashKey        string
 	reportCh       chan *monitor.RuntimeMetric
 	workersPool    *workerpool.Pool[*monitor.RuntimeMetric]
+	encProcessor   encryption.Processor
 }
 
-func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, hashKey string) (*Agent, error) {
+func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, hashKey string, encP encryption.Processor) (*Agent, error) {
 
 	httpClient := resty.New()
 	httpClient.
@@ -69,6 +71,7 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Moni
 		hashKey:        hashKey,
 		reportCh:       make(chan *monitor.RuntimeMetric, runtime.NumCPU()),
 		workersPool:    pool,
+		encProcessor:   encP,
 	}, nil
 }
 
@@ -220,12 +223,16 @@ func (a *Agent) SendUpdate(metric *models.Metric) (*resty.Response, error) {
 	}
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updateURI)
-	payload := buf.Bytes()
+	payload, err := a.encProcessor.Encrypt(buf.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
 	req := a.httpClient.R()
 
 	if a.hashKey != "" {
 		hash := hmac.New(sha256.New, []byte(a.hashKey))
-		hash.Write(buf.Bytes())
+		hash.Write(payload)
 
 		req.SetHeader("HashSHA256", base64.StdEncoding.EncodeToString(hash.Sum(nil)))
 	}
@@ -248,7 +255,10 @@ func (a *Agent) SendUpdates(metric *models.Metric) (*resty.Response, error) {
 	}
 
 	url := fmt.Sprintf("%s%s", a.serverURL, updatesURI)
-	payload := buf.Bytes()
+	payload, err := a.encProcessor.Encrypt(buf.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	req := a.httpClient.R()
 
 	if a.hashKey != "" {

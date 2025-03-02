@@ -8,7 +8,7 @@ agent-run:
 
 .PHONY: server-run
 server-run:
-	@go run -ldflags "-X main.buildVersion=$(buildVersion) -X main.buildCommit=$(buildCommit) -X main.buildDate=$(buildDate)" cmd/server/main.go
+	@go run -ldflags "-X main.buildVersion=$(buildVersion) -X main.buildCommit=$(buildCommit) -X main.buildDate=$(buildDate)" cmd/server/main.go -l "DEBUG"
 
 .PHONY: multichecker
 multichecker:
