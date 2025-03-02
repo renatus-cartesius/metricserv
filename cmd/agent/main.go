@@ -7,7 +7,6 @@ import (
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 
@@ -25,7 +24,7 @@ var (
 
 func main() {
 
-	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	pprofCtx, pprofStopCtx := context.WithCancel(context.Background())
 	defer pprofStopCtx()
