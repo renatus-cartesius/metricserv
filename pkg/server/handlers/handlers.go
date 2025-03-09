@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
+	"net"
 	"net/http"
 	"slices"
 	"strconv"
@@ -21,6 +22,12 @@ import (
 
 func Setup(r *chi.Mux, srv *ServerHandler, hashKey string) {
 
+	//Global middlewares
+	if srv.trustedSubnet != nil {
+		r.Use(middlewares.CheckSubnet(srv.trustedSubnet))
+	}
+
+	//Routes structure
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.AllMetrics))))
 		r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
@@ -34,17 +41,20 @@ func Setup(r *chi.Mux, srv *ServerHandler, hashKey string) {
 			r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
 		})
 	})
+
 }
 
 type ServerHandler struct {
-	storage      storage.Storager
-	encProcessor encryption.Processor
+	trustedSubnet *net.IPNet
+	storage       storage.Storager
+	encProcessor  encryption.Processor
 }
 
-func NewServerHandler(storage storage.Storager, encP encryption.Processor) *ServerHandler {
+func NewServerHandler(storage storage.Storager, encP encryption.Processor, tSubnet *net.IPNet) *ServerHandler {
 	return &ServerHandler{
-		storage:      storage,
-		encProcessor: encP,
+		trustedSubnet: tSubnet,
+		storage:       storage,
+		encProcessor:  encP,
 	}
 }
 
