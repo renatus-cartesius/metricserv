@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"io"
 	"net/http"
 	"strings"
@@ -154,4 +155,31 @@ func Gzipper(h http.HandlerFunc) http.HandlerFunc {
 
 	})
 
+}
+
+func Decryptor(processor encryption.Processor, h http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			logger.Log.Error(
+				"error on reading request body",
+				zap.Error(err),
+			)
+			return
+		}
+
+		decryptedData, err := processor.Decrypt(body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			logger.Log.Error(
+				"error on decrypting request body",
+				zap.Error(err),
+			)
+		}
+
+		r.Body = io.NopCloser(bytes.NewBuffer(decryptedData))
+
+		h.ServeHTTP(w, r)
+	})
 }
