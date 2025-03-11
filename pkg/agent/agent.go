@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
+	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"github.com/renatus-cartesius/metricserv/pkg/workerpool"
+	"net"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -35,6 +37,7 @@ const (
 )
 
 type Agent struct {
+	agentIP        net.IP
 	monitor        monitor.Monitor
 	reportInterval int
 	pollInterval   int
@@ -47,6 +50,11 @@ type Agent struct {
 }
 
 func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, hashKey string, encP encryption.Processor) (*Agent, error) {
+
+	agentIP, err := utils.GetOutgoingIpByUrl(serverURL)
+	if err != nil {
+		return nil, err
+	}
 
 	httpClient := resty.New()
 	httpClient.
@@ -63,6 +71,7 @@ func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Moni
 	}
 
 	return &Agent{
+		agentIP:        agentIP,
 		monitor:        mon,
 		reportInterval: repoInterval,
 		pollInterval:   pollInterval,
@@ -229,6 +238,7 @@ func (a *Agent) SendUpdate(metric *models.Metric) (*resty.Response, error) {
 	}
 
 	req := a.httpClient.R()
+	req.SetHeader("X-Real-IP", a.agentIP.String())
 
 	if a.hashKey != "" {
 		hash := hmac.New(sha256.New, []byte(a.hashKey))
@@ -260,6 +270,7 @@ func (a *Agent) SendUpdates(metric *models.Metric) (*resty.Response, error) {
 		return nil, err
 	}
 	req := a.httpClient.R()
+	req.SetHeader("X-Real-IP", a.agentIP.String())
 
 	if a.hashKey != "" {
 		hash := hmac.New(sha256.New, []byte(a.hashKey))

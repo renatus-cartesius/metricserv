@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 
@@ -182,4 +183,34 @@ func Decryptor(processor encryption.Processor, h http.HandlerFunc) http.HandlerF
 
 		h.ServeHTTP(w, r)
 	})
+}
+
+func CheckSubnet(subnet *net.IPNet) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			var remoteIP string
+			if remoteIP = r.Header.Get("X-Real-IP"); remoteIP == "" {
+				logger.Log.Info(
+					"request without x-real-ip header",
+					zap.String("trusted_subnet", subnet.String()),
+					zap.String("ip", remoteIP),
+				)
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+
+			if !subnet.Contains(net.ParseIP(remoteIP)) {
+				logger.Log.Info(
+					"request from untrusted subnet",
+					zap.String("trusted_subnet", subnet.String()),
+					zap.String("ip", remoteIP),
+				)
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+
+			h.ServeHTTP(w, r)
+		})
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -109,7 +110,10 @@ func main() {
 
 	if cfg.RestoreStorage {
 		if err = s.Load(ctx); err != nil {
-			log.Fatalln(err)
+			logger.Log.Fatal(
+				"error when restoring storage",
+				zap.Error(err),
+			)
 		}
 	}
 
@@ -151,7 +155,15 @@ func main() {
 
 	rsaProcessor.SetPrivateKey(privateKey)
 
-	srv := handlers.NewServerHandler(s, rsaProcessor)
+	var trustedSubnet *net.IPNet
+	if cfg.TrustedSubnet != "" {
+		_, trustedSubnet, err = net.ParseCIDR(cfg.TrustedSubnet)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
+	srv := handlers.NewServerHandler(s, rsaProcessor, trustedSubnet)
 
 	r := chi.NewRouter()
 
