@@ -52,8 +52,8 @@ func TagHelper(tag string) string {
 	}
 }
 
-func GetOutgoingIpByUrl(rawUrl string) (net.IP, error) {
-	url, err := url.Parse(rawUrl)
+func GetOutgoingIPByURL(rawURL string) (net.IP, error) {
+	url, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}

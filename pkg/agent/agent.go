@@ -51,7 +51,7 @@ type Agent struct {
 
 func NewAgent(repoInterval, pollInterval int, serverURL string, mon monitor.Monitor, hashKey string, encP encryption.Processor) (*Agent, error) {
 
-	agentIP, err := utils.GetOutgoingIpByUrl(serverURL)
+	agentIP, err := utils.GetOutgoingIPByURL(serverURL)
 	if err != nil {
 		return nil, err
 	}
