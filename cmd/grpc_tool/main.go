@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/renatus-cartesius/metricserv/pkg/proto"
+	"github.com/renatus-cartesius/metricserv/pkg/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"log"
@@ -19,13 +19,13 @@ func main() {
 	}
 	defer conn.Close()
 
-	c := proto.NewMetricsServiceClient(conn)
+	c := api.NewMetricsServiceClient(conn)
 
 	// Gauge add
-	_, err = c.AddMetric(ctx, &proto.AddMetricRequest{
+	_, err = c.AddMetric(ctx, &api.AddMetricRequest{
 		MetricID: "test_gauge1",
-		Metric: &proto.Metric{
-			Type:  proto.MetricType_GAUGE,
+		Metric: &api.Metric{
+			Type:  api.MetricType_GAUGE,
 			Value: fmt.Sprintf("%v", rand.Float32()),
 		},
 	})
@@ -33,9 +33,9 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	respG, err := c.GetMetric(ctx, &proto.GetMetricRequest{
+	respG, err := c.GetMetric(ctx, &api.GetMetricRequest{
 		MetricID: "test_gauge1",
-		Type:     proto.MetricType_GAUGE,
+		Type:     api.MetricType_GAUGE,
 	})
 
 	if err != nil {
@@ -45,10 +45,10 @@ func main() {
 	fmt.Println(respG)
 
 	// Counter add
-	_, err = c.AddMetric(ctx, &proto.AddMetricRequest{
+	_, err = c.AddMetric(ctx, &api.AddMetricRequest{
 		MetricID: "test_counter1",
-		Metric: &proto.Metric{
-			Type:  proto.MetricType_COUNTER,
+		Metric: &api.Metric{
+			Type:  api.MetricType_COUNTER,
 			Value: fmt.Sprintf("%v", rand.Int63()),
 		},
 	})
@@ -56,9 +56,9 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	respC, err := c.GetMetric(ctx, &proto.GetMetricRequest{
+	respC, err := c.GetMetric(ctx, &api.GetMetricRequest{
 		MetricID: "test_counter1",
-		Type:     proto.MetricType_COUNTER,
+		Type:     api.MetricType_COUNTER,
 	})
 
 	if err != nil {

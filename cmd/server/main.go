@@ -6,8 +6,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/renatus-cartesius/metricserv/pkg/api"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
-	"github.com/renatus-cartesius/metricserv/pkg/proto"
 	"github.com/renatus-cartesius/metricserv/pkg/server/pb"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"google.golang.org/grpc"
@@ -191,7 +191,7 @@ func main() {
 
 	wg := sync.WaitGroup{}
 	gs := grpc.NewServer()
-	proto.RegisterMetricsServiceServer(gs, &pb.Server{
+	api.RegisterMetricsServiceServer(gs, &pb.Server{
 		TrustedSubnet: trustedSubnet,
 		Storage:       s,
 		EncProcessor:  rsaProcessor,
