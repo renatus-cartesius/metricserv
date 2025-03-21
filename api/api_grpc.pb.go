@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: pkg/api/api.proto
+// source: api/api.proto
 
 package api
 
@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -27,7 +28,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MetricsServiceClient interface {
-	AddMetric(ctx context.Context, in *AddMetricRequest, opts ...grpc.CallOption) (*AddMetricResponse, error)
+	AddMetric(ctx context.Context, in *AddMetricRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetMetric(ctx context.Context, in *GetMetricRequest, opts ...grpc.CallOption) (*GetMetricResponse, error)
 }
 
@@ -39,9 +40,9 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 	return &metricsServiceClient{cc}
 }
 
-func (c *metricsServiceClient) AddMetric(ctx context.Context, in *AddMetricRequest, opts ...grpc.CallOption) (*AddMetricResponse, error) {
+func (c *metricsServiceClient) AddMetric(ctx context.Context, in *AddMetricRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddMetricResponse)
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, MetricsService_AddMetric_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -63,7 +64,7 @@ func (c *metricsServiceClient) GetMetric(ctx context.Context, in *GetMetricReque
 // All implementations must embed UnimplementedMetricsServiceServer
 // for forward compatibility.
 type MetricsServiceServer interface {
-	AddMetric(context.Context, *AddMetricRequest) (*AddMetricResponse, error)
+	AddMetric(context.Context, *AddMetricRequest) (*emptypb.Empty, error)
 	GetMetric(context.Context, *GetMetricRequest) (*GetMetricResponse, error)
 	mustEmbedUnimplementedMetricsServiceServer()
 }
@@ -75,7 +76,7 @@ type MetricsServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMetricsServiceServer struct{}
 
-func (UnimplementedMetricsServiceServer) AddMetric(context.Context, *AddMetricRequest) (*AddMetricResponse, error) {
+func (UnimplementedMetricsServiceServer) AddMetric(context.Context, *AddMetricRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddMetric not implemented")
 }
 func (UnimplementedMetricsServiceServer) GetMetric(context.Context, *GetMetricRequest) (*GetMetricResponse, error) {
@@ -155,5 +156,5 @@ var MetricsService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/api/api.proto",
+	Metadata: "api/api.proto",
 }

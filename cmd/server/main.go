@@ -6,7 +6,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"github.com/renatus-cartesius/metricserv/pkg/api"
+	"github.com/renatus-cartesius/metricserv/api"
+	"github.com/renatus-cartesius/metricserv/pkg/config"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"github.com/renatus-cartesius/metricserv/pkg/server/pb"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
@@ -24,7 +25,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/renatus-cartesius/metricserv/cmd/helpers"
-	"github.com/renatus-cartesius/metricserv/cmd/server/config"
 	"github.com/renatus-cartesius/metricserv/pkg/logger"
 	"github.com/renatus-cartesius/metricserv/pkg/server/handlers"
 	"github.com/renatus-cartesius/metricserv/pkg/storage"
@@ -48,7 +48,7 @@ func main() {
 	defer pprofStopCtx()
 	go helpers.SetupPprofHandlers(pprofCtx, ":8081")
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadServerConfig()
 	if err != nil {
 		log.Fatalln(err)
 	}

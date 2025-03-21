@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-type Config struct {
+type ServerConfig struct {
 	SrvAddress     string
 	SaveInterval   int
 	RestoreStorage bool
@@ -23,12 +23,12 @@ type Config struct {
 	TrustedSubnet  string
 }
 
-func LoadConfig() (*Config, error) {
+func LoadServerConfig() (*ServerConfig, error) {
 
 	var err error
 	var ok bool
-	config := &Config{}
-	defaults := &Config{
+	config := &ServerConfig{}
+	defaults := &ServerConfig{
 		SrvAddress:     "localhost:8080",
 		ServerLogLevel: "DEBUG",
 		SavePath:       "./storage.json",
