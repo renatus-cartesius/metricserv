@@ -11,23 +11,24 @@ import (
 	"strings"
 )
 
-type Config struct {
-	SrvAddress     string `flag:"-a"`
-	SaveInterval   int    `flag:"-i"`
-	RestoreStorage bool   `flag:"-r"`
-	ServerLogLevel string `flag:"-l"`
-	SavePath       string `flag:"-f"`
-	DBDsn          string `flag:"-d"`
-	HashKey        string `flag:"-k"`
-	PrivateKey     string `flag:"-crypto-key"`
+type ServerConfig struct {
+	SrvAddress     string
+	SaveInterval   int
+	RestoreStorage bool
+	ServerLogLevel string
+	SavePath       string
+	DBDsn          string
+	HashKey        string
+	PrivateKey     string
+	TrustedSubnet  string
 }
 
-func LoadConfig() (*Config, error) {
+func LoadServerConfig() (*ServerConfig, error) {
 
 	var err error
 	var ok bool
-	config := &Config{}
-	defaults := &Config{
+	config := &ServerConfig{}
+	defaults := &ServerConfig{
 		SrvAddress:     "localhost:8080",
 		ServerLogLevel: "DEBUG",
 		SavePath:       "./storage.json",
@@ -35,6 +36,8 @@ func LoadConfig() (*Config, error) {
 		SaveInterval:   300,
 		RestoreStorage: true,
 		HashKey:        "",
+		PrivateKey:     "./private.pem",
+		TrustedSubnet:  "",
 	}
 
 	configPath := "./server.json"
@@ -76,14 +79,15 @@ func LoadConfig() (*Config, error) {
 		logger.Log.Error("cannot unmarshall config file content")
 	}
 
-	flag.StringVar(&config.SrvAddress, "a", config.SrvAddress, "address to metrics server")
-	flag.IntVar(&config.SaveInterval, "i", config.SaveInterval, "interval to storage file save")
+	flag.StringVar(&config.SrvAddress, "a", defaults.SrvAddress, "address to metrics server")
+	flag.IntVar(&config.SaveInterval, "i", defaults.SaveInterval, "interval to storage file save")
 	flag.BoolVar(&config.RestoreStorage, "r", defaults.RestoreStorage, "if true restoring server from file")
 	flag.StringVar(&config.ServerLogLevel, "l", defaults.ServerLogLevel, "logging level")
 	flag.StringVar(&config.SavePath, "f", defaults.SavePath, "path to storage file save")
 	flag.StringVar(&config.DBDsn, "d", defaults.DBDsn, "connection string to database")
 	flag.StringVar(&config.HashKey, "k", defaults.HashKey, "key for hashing payload")
-	flag.StringVar(&config.PrivateKey, defaults.PrivateKey, "./private.pem", "private key")
+	flag.StringVar(&config.PrivateKey, "p", defaults.PrivateKey, "private key")
+	flag.StringVar(&config.TrustedSubnet, "t", defaults.TrustedSubnet, "agents trusted subnet")
 	flag.StringVar(&configPath, "config", "./server.json", "path to config file")
 
 	flag.Parse()
@@ -117,6 +121,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if envPrivateKey := os.Getenv("CRYPTO_KEY"); envPrivateKey != "" {
 		config.PrivateKey = envPrivateKey
+	}
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		config.TrustedSubnet = envTrustedSubnet
 	}
 
 	return config, nil

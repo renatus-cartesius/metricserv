@@ -6,25 +6,29 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/renatus-cartesius/metricserv/api"
+	"github.com/renatus-cartesius/metricserv/pkg/config"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
+	"github.com/renatus-cartesius/metricserv/pkg/server/pb"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
+	"google.golang.org/grpc"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-	"go.uber.org/zap"
-
 	"github.com/renatus-cartesius/metricserv/cmd/helpers"
-	"github.com/renatus-cartesius/metricserv/cmd/server/config"
 	"github.com/renatus-cartesius/metricserv/pkg/logger"
 	"github.com/renatus-cartesius/metricserv/pkg/server/handlers"
 	"github.com/renatus-cartesius/metricserv/pkg/storage"
+	"go.uber.org/zap"
 )
 
 //go:embed migrations/*.sql
@@ -44,7 +48,7 @@ func main() {
 	defer pprofStopCtx()
 	go helpers.SetupPprofHandlers(pprofCtx, ":8081")
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadServerConfig()
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -109,7 +113,10 @@ func main() {
 
 	if cfg.RestoreStorage {
 		if err = s.Load(ctx); err != nil {
-			log.Fatalln(err)
+			logger.Log.Fatal(
+				"error when restoring storage",
+				zap.Error(err),
+			)
 		}
 	}
 
@@ -151,7 +158,15 @@ func main() {
 
 	rsaProcessor.SetPrivateKey(privateKey)
 
-	srv := handlers.NewServerHandler(s, rsaProcessor)
+	var trustedSubnet *net.IPNet
+	if cfg.TrustedSubnet != "" {
+		_, trustedSubnet, err = net.ParseCIDR(cfg.TrustedSubnet)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
+	srv := handlers.NewServerHandler(s, rsaProcessor, trustedSubnet)
 
 	r := chi.NewRouter()
 
@@ -164,6 +179,37 @@ func main() {
 
 	shutdownSig := make(chan os.Signal, 1)
 	signal.Notify(shutdownSig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	// GRPC server setup
+	listen, err := net.Listen("tcp", ":3200")
+	if err != nil {
+		logger.Log.Error(
+			"error on creating grpc listen",
+			zap.Error(err),
+		)
+	}
+
+	wg := sync.WaitGroup{}
+	gs := grpc.NewServer()
+	api.RegisterMetricsServiceServer(gs, &pb.Server{
+		TrustedSubnet: trustedSubnet,
+		Storage:       s,
+		EncProcessor:  rsaProcessor,
+	})
+
+	wg.Add(1)
+	go func() {
+		logger.Log.Info("starting grpc server")
+		if err := gs.Serve(listen); err != nil {
+			logger.Log.Error(
+				"error on listening grpc server",
+				zap.Error(err),
+			)
+		}
+
+		logger.Log.Info("shutting down grpc server")
+		wg.Done()
+	}()
 
 	go func() {
 		<-shutdownSig
@@ -194,6 +240,8 @@ func main() {
 			)
 		}
 
+		gs.GracefulStop()
+
 	}()
 
 	logger.Log.Info(
@@ -209,4 +257,6 @@ func main() {
 	if err = s.Save(ctx); err != nil {
 		log.Fatalln(err)
 	}
+
+	wg.Wait()
 }

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/renatus-cartesius/metricserv/cmd/helpers"
+	"github.com/renatus-cartesius/metricserv/pkg/config"
 	"github.com/renatus-cartesius/metricserv/pkg/encryption"
 	"github.com/renatus-cartesius/metricserv/pkg/utils"
 	"log"
 	"os/signal"
 	"syscall"
 
-	"github.com/renatus-cartesius/metricserv/cmd/agent/config"
 	"github.com/renatus-cartesius/metricserv/pkg/agent"
 	"github.com/renatus-cartesius/metricserv/pkg/logger"
 	"github.com/renatus-cartesius/metricserv/pkg/monitor"
@@ -30,7 +30,7 @@ func main() {
 	defer pprofStopCtx()
 	go helpers.SetupPprofHandlers(pprofCtx, ":8082")
 
-	config, err := config.LoadConfig()
+	config, err := config.LoadAgentConfig()
 	if err != nil {
 		log.Fatalln(err)
 	}
