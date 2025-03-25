@@ -4,6 +4,8 @@ package utils
 import (
 	"io"
 	"math"
+	"net"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -48,4 +50,21 @@ func TagHelper(tag string) string {
 	} else {
 		return tag
 	}
+}
+
+func GetOutgoingIPByURL(rawURL string) (net.IP, error) {
+	url, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.Dial("tcp", url.Host)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.TCPAddr)
+
+	return localAddr.IP, nil
 }

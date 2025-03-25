@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-type Config struct {
+type AgentConfig struct {
 	SrvAddress     string
 	ReportInterval int
 	PollInterval   int
@@ -21,12 +21,12 @@ type Config struct {
 	PublicKey      string
 }
 
-func LoadConfig() (*Config, error) {
+func LoadAgentConfig() (*AgentConfig, error) {
 
 	var err error
 	var ok bool
-	config := &Config{}
-	defaults := &Config{
+	config := &AgentConfig{}
+	defaults := &AgentConfig{
 		SrvAddress:     "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
